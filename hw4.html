@@ -1,0 +1,105 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HW4</title><link rel="stylesheet" href="style.css"><script src="stoch.js"></script>
+<style>.grid{display:grid;gap:6px;margin:.5rem 0}.grid canvas{width:100%;height:auto}.grid .h{color:var(--ac);font-size:.85rem}select{background:var(--card);color:var(--fg);border:1px solid var(--bd);padding:.3rem}</style></head><body>
+<p><a href="index.html">← home</a></p>
+<h1>HW4 · n systems, m attackers: LLN and CLT</h1>
+
+<h2>1. Parameters</h2>
+<div class="row">model:
+<select id="model" onchange="$('p').disabled=this.value==='rad'"><option value="ber">Bernoulli {0,1}, P(X=1)=p</option><option value="rad">Rademacher {−1,+1}, p = 1/2</option></select>
+p = <input id="p" type="number" value="0.3" step="0.05" min="0.01" max="0.99">
+m (attackers) = <input id="m" type="number" value="2000" min="10">
+ε = <input id="eps" type="number" value="0.1" step="0.05" min="0.01"></div>
+<div class="row">n values (systems per attacker, up to 5, comma separated): <input id="ns" value="10,100,1000,10000" style="width:16rem"><button onclick="run()">Simulate</button></div>
+<p class="dim">Each attacker probes n systems in sequence: X<sub>i</sub> is the score on system i, so S<sub>n</sub> is that attacker's aggregate score. The m attackers are m independent trajectories.</p>
+<pre id="so" style="max-height:none">press Simulate</pre>
+
+<h2>2. Sample trajectories (12 attackers, log-scale in k)</h2>
+<div class="row"><canvas id="t1" width="290" height="190"></canvas><canvas id="t2" width="290" height="190"></canvas><canvas id="t3" width="290" height="190"></canvas></div>
+
+<h2>3. Distributions over the m attackers (rows: n, columns: quantity; same x-axis within a column)</h2>
+<p class="dim">Green bars: empirical density. Orange: normal curve with the mean and variance predicted by the CLT.</p>
+<div id="grid" class="grid"></div>
+
+<h2>4. Statistics: empirical vs theory</h2>
+<pre id="st" style="max-height:none"></pre>
+
+<h2>5. Discussion</h2>
+<div class="txt">
+<h3>Model and interpretation</h3>
+<p>Each attacker meets n systems one after the other and the i-th outcome X<sub>i</sub> is i.i.d. In the <b>Bernoulli</b> model X<sub>i</sub> = 1 means "system i is penetrated" (probability p), so S<sub>n</sub> is the number of systems an attacker breaks, S<sub>n</sub>/n the fraction of breached systems and μ = p, σ² = p(1−p). In the <b>Rademacher</b> model X<sub>i</sub> = ±1 is a symmetric net outcome (+1 attacker gains ground, −1 defender wins); S<sub>n</sub> is a zero-drift random walk with μ = 0 and σ² = 1. (Rademacher is 2·Bernoulli(1/2) − 1, so it is a Bernoulli case after centring and rescaling.) The m attackers are independent copies of the walk: they do not change the law of any single attacker's score, they give a sample of size m from which we estimate that law.</p>
+<h3>Law of Large Numbers</h3>
+<p>S<sub>n</sub>/n has mean μ and variance σ²/n. By Chebyshev, P(|S<sub>n</sub>/n − μ| &gt; ε) ≤ σ²/(nε²) → 0, which is convergence in probability (weak LLN). Section 4 compares the empirical frequency of this event with the Chebyshev bound and with the much sharper Hoeffding bound (2e<sup>−nε²/2</sup> for Rademacher, 2e<sup>−2nε²</sup> for Bernoulli): the true probability falls exponentially fast, and Chebyshev is only a loose guarantee. The trajectories in the middle plot show the almost-sure version (strong LLN): each individual path settles at μ. For the system owner, the fraction of breached systems becomes predictable as n grows, even though the outcome on each single system is random.</p>
+<h3>Variance under the three normalizations</h3>
+<p>Var(S<sub>n</sub>) = nσ² grows linearly (the spread of the total grows like √n, as the envelope ±2σ√k shows); Var(S<sub>n</sub>/n) = σ²/n shrinks to 0, so the distribution degenerates to a point mass at μ; Var(S<sub>n</sub>/√n) = σ² stays constant. √n is the only scaling that gives a non-degenerate limit: dividing by n is too much (everything collapses), not dividing is too little (everything spreads out). The columns of section 3 show exactly this: widening, collapsing, constant width. Note that in the Bernoulli case S<sub>n</sub>/√n has mean p√n → ∞ and therefore drifts away; the centred version (S<sub>n</sub> − np)/√n is the one that stabilises, which is why it is shown as a fourth column.</p>
+<h3>Central Limit Theorem</h3>
+<p>In the Rademacher case S<sub>n</sub>/√n converges in distribution to N(0,1); in the Bernoulli case (S<sub>n</sub> − np)/√n converges to N(0, p(1−p)). The histograms approach the orange Gaussian curve as n grows. For small n the distribution is clearly discrete (lattice: S<sub>n</sub> only takes n+1 values, only every second integer for Rademacher), and for n = 10 the fit is visibly poor, in particular when p is far from 1/2 because of the skewness. The Kolmogorov distance decreases roughly like 1/√n (Berry–Esseen). Two warnings when reading the KS column: with only m samples the statistic has a sampling noise of about 1/√m (the 5% critical value for a continuous law is ≈ 1.36/√m), and because S<sub>n</sub> is discrete the statistic cannot go to 0 faster than about half of the largest point mass (≈ 0.4/√n for Rademacher). So it flattens at a noise floor instead of reaching 0; this does not contradict the CLT.</p>
+<h3>Effect of n (system size) and m (number of attackers)</h3>
+<ul>
+<li><b>n</b> changes the law of the aggregate score: the expected score nμ grows linearly, the absolute fluctuation grows like σ√n, but the relative fluctuation (fluctuation of S<sub>n</sub>/n) shrinks like σ/√n. Larger systems therefore have a larger but more predictable (relative) aggregate exposure.</li>
+<li><b>m</b> does not change the distribution of S<sub>n</sub>; it only improves our picture of it (histogram noise ∝ 1/√m). Pooled over all attackers, the total score is a sum of m·n i.i.d. terms with mean mnμ and variance mnσ², and the estimate of μ from all m·n probes has standard error σ/√(mn): more attackers or more systems play the same role for this pooled estimate.</li>
+<li><b>Caveat.</b> The model assumes independent and identically distributed outcomes. In real systems vulnerabilities are correlated (same software, same credentials, lateral movement) and attackers adapt, which breaks independence: the variance of S<sub>n</sub> can then grow faster than n and the Gaussian approximation can fail.</li>
+</ul>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const fm=v=>v===0?'0':(Math.abs(v)>=1e4||Math.abs(v)<1e-2)?v.toExponential(2):v.toFixed(3);
+$('p').disabled=$('model').value==='rad';
+function run(){
+  const model=$('model').value,p=Math.min(.99,Math.max(.01,+$('p').value)),m=Math.max(10,Math.round(+$('m').value)),eps=Math.max(.01,+$('eps').value);
+  const ns=[...new Set($('ns').value.split(',').map(s=>Math.round(+s)).filter(v=>v>=1))].sort((a,b)=>a-b).slice(0,5);
+  if(!ns.length){$('so').textContent='Give at least one n.';return}
+  if(m*ns[ns.length-1]>3e8){$('so').textContent='m × max(n) is too large (limit 3·10⁸ draws).';return}
+  $('so').textContent='simulating…';setTimeout(()=>go(model,p,m,ns,eps),30);
+}
+function drawPaths(id,pts,paths,f,env,label){
+  const c=$(id),g=c.getContext('2d'),W=c.width,H=c.height,N=pts[pts.length-1],lx=Math.log(Math.max(N,2));
+  const X=k=>6+Math.log(k)/lx*(W-12);
+  let lo=Infinity,hi=-Infinity;paths.forEach(P=>P.forEach((S,i)=>{const v=f(S,pts[i]);if(v<lo)lo=v;if(v>hi)hi=v}));
+  if(hi===lo){hi+=1;lo-=1}const pad=.05*(hi-lo);lo-=pad;hi+=pad;const Y=v=>H-14-(v-lo)/(hi-lo)*(H-30);
+  g.clearRect(0,0,W,H);g.strokeStyle='#3d2563';g.beginPath();g.moveTo(6,Y(0));g.lineTo(W-6,Y(0));g.stroke();
+  [0,1].forEach(s=>{g.strokeStyle='#ff7a1a';g.setLineDash([4,3]);g.beginPath();pts.forEach((k,i)=>{const e=env(k)[s],x=X(k),y=Math.max(0,Math.min(H,Y(e)));i?g.lineTo(x,y):g.moveTo(x,y)});g.stroke();g.setLineDash([])});
+  g.lineWidth=1;paths.forEach(P=>{g.strokeStyle='rgba(157,255,58,.55)';g.beginPath();P.forEach((S,i)=>{const x=X(pts[i]),y=Y(f(S,pts[i]));i?g.lineTo(x,y):g.moveTo(x,y)});g.stroke()});
+  g.fillStyle='#e6def2';g.font='11px monospace';g.fillText(label,6,12);g.fillText('k = 1',6,H-3);g.fillText('k = '+N,W-6-7*String(N).length-30,H-3);
+}
+function histCell(cv,vals,n,col,lo,hi,model,m,s){
+  const g=cv.getContext('2d'),W=cv.width,H=cv.height,c=col.c(n),sh=col.sh(n),par=model==='rad'?n%2:0,x=lo*c+sh;
+  const L0=par+s*Math.floor((x-par)/s),e0=L0-s/2,k=Math.max(1,Math.ceil((hi-lo)*c/50/s)),wS=k*s,wq=wS/c;
+  const nb=Math.ceil((hi*c+sh-e0)/wS)+1,cnt=new Float64Array(nb);
+  for(const S of vals){const j=Math.floor((S-e0)/wS);if(j>=0&&j<nb)cnt[j]++}
+  const mu=col.mean(n),sd=col.sd(n),peak=1/(sd*Math.sqrt(2*Math.PI)),dm=Math.max(...cnt)/(m*wq),ym=Math.max(dm,peak)*1.1;
+  const X=q=>4+(q-lo)/(hi-lo)*(W-8),Y=d=>H-14-d/ym*(H-26);
+  g.clearRect(0,0,W,H);g.fillStyle='#9dff3a';
+  for(let j=0;j<nb;j++){if(!cnt[j])continue;const q0=(e0+j*wS-sh)/c,x0=X(q0),x1=X(q0+wq),y=Y(cnt[j]/(m*wq));g.fillRect(x0,y,Math.max(1,x1-x0-.5),H-14-y)}
+  g.strokeStyle='#ff7a1a';g.beginPath();for(let i=0;i<=120;i++){const q=lo+(hi-lo)*i/120,d=Math.exp(-((q-mu)**2)/(2*sd*sd))*peak;i?g.lineTo(X(q),Y(d)):g.moveTo(X(q),Y(d))}g.stroke();
+  g.fillStyle='#e6def2';g.font='11px monospace';g.fillText('n = '+n,6,12);g.fillText(lo.toPrecision(3),4,H-3);const t=hi.toPrecision(3);g.fillText(t,W-4-6.6*t.length,H-3);
+}
+function go(model,p,m,ns,eps){
+  const P=STO.params(model,p),mu=P.mu,sig=Math.sqrt(P.s2),N=ns[ns.length-1],t0=performance.now();
+  const sims=STO.simulate(model,p,m,ns),ms=performance.now()-t0;
+  const pts=STO.checkpoints(N),paths=[];for(let i=0;i<12;i++)paths.push(STO.path(model,p,pts));
+  drawPaths('t1',pts,paths,(S,k)=>S,k=>[mu*k-2*sig*Math.sqrt(k),mu*k+2*sig*Math.sqrt(k)],'S_k  (orange: kμ ± 2σ√k)');
+  drawPaths('t2',pts,paths,(S,k)=>S/k,k=>[mu-2*sig/Math.sqrt(k),mu+2*sig/Math.sqrt(k)],'S_k / k  (→ μ = '+mu+')');
+  drawPaths('t3',pts,paths,(S,k)=>S/Math.sqrt(k),k=>[mu*Math.sqrt(k)-2*sig,mu*Math.sqrt(k)+2*sig],'S_k / √k');
+  const cols=[{t:'S_n (total)',c:n=>1,sh:n=>0,mean:n=>n*mu,sd:n=>sig*Math.sqrt(n)},
+    {t:'S_n / n (average)',c:n=>n,sh:n=>0,mean:n=>mu,sd:n=>sig/Math.sqrt(n)},
+    {t:'S_n / √n (normalized)',c:n=>Math.sqrt(n),sh:n=>0,mean:n=>mu*Math.sqrt(n),sd:n=>sig}];
+  if(mu!==0)cols.push({t:'(S_n − nμ)/√n (centred)',c:n=>Math.sqrt(n),sh:n=>n*mu,mean:n=>0,sd:n=>sig});
+  const grid=$('grid');grid.innerHTML='';grid.style.gridTemplateColumns=`repeat(${cols.length},1fr)`;
+  cols.forEach(c=>{const d=document.createElement('div');d.className='h';d.textContent=c.t;grid.appendChild(d)});
+  cols.forEach(c=>{c.lo=Math.min(...ns.map(n=>c.mean(n)-4*c.sd(n)));c.hi=Math.max(...ns.map(n=>c.mean(n)+4*c.sd(n)))});
+  ns.forEach((n,i)=>cols.forEach(col=>{const cv=document.createElement('canvas');cv.width=cols.length>3?220:290;cv.height=100;grid.appendChild(cv);histCell(cv,sims[i],n,col,col.lo,col.hi,model,m,P.step)}));
+  let o=`model: ${model==='rad'?'Rademacher':'Bernoulli (p = '+p+')'}   μ = ${mu}   σ² = ${P.s2.toFixed(4)}   m = ${m} attackers   ε = ${eps}   (${ms.toFixed(0)} ms)\n\n`;
+  o+='n'.padEnd(7)+'Var(S_n) emp / th'.padEnd(26)+'Var(S_n/n) emp / th'.padEnd(28)+'Var(S_n/√n) emp / th'.padEnd(24)+'\n';
+  const rows2=[];
+  ns.forEach((n,i)=>{const a=Array.from(sims[i]);
+    o+=String(n).padEnd(7)+`${fm(STO.variance(a))} / ${fm(n*P.s2)}`.padEnd(26)+`${fm(STO.variance(a.map(s=>s/n)))} / ${fm(P.s2/n)}`.padEnd(28)+`${fm(STO.variance(a.map(s=>s/Math.sqrt(n))))} / ${fm(P.s2)}`.padEnd(24)+'\n';
+    const ex=a.filter(s=>Math.abs(s/n-mu)>eps).length/m,hoef=Math.min(1,2*Math.exp(model==='rad'?-n*eps*eps/2:-2*n*eps*eps)),cheb=Math.min(1,P.s2/(n*eps*eps));
+    const ksv=STO.ks(a.map(s=>(s-n*mu)/(sig*Math.sqrt(n))));
+    rows2.push(String(n).padEnd(7)+fm(ex).padEnd(12)+fm(cheb).padEnd(12)+fm(hoef).padEnd(12)+fm(ksv).padEnd(10)+fm(sig/Math.sqrt(m*n)));});
+  o+=`\nLLN:  P(|S_n/n − μ| > ε)            CLT:        pooled over all m·n probes\n`+'n'.padEnd(7)+'empirical'.padEnd(12)+'Chebyshev'.padEnd(12)+'Hoeffding'.padEnd(12)+'KS vs N(0,1)'.padEnd(10)+' std. error of μ̂ = σ/√(mn)\n'+rows2.join('\n');
+  o+=`\n\nKS is computed on the standardized score (S_n − nμ)/(σ√n). Sampling noise ≈ 1/√m, 5% critical value ≈ ${(1.36/Math.sqrt(m)).toFixed(3)} (approximate: S_n is discrete).`;
+  $('st').textContent=o;$('so').textContent=`done: ${m} attackers × up to ${N} systems = ${(m*N).toExponential(1)} draws in ${ms.toFixed(0)} ms`;
+}
+</script></body></html>

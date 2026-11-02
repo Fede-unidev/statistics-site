@@ -1,0 +1,91 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HW2</title><link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.9.3/sha3.min.js"></script></head><body>
+<p><a href="index.html">← home</a></p>
+<h1>HW2 · from seed to address</h1>
+<pre style="max-height:none">Mnemonic → BIP-39 → Seed → BIP-32/44 → Private key → secp256k1 → Public key → Keccak-256 → Address → EIP-55</pre>
+
+<h2>1. Real pipeline (computed in your browser)</h2>
+<p class="dim">Use test mnemonics only: never the phrase of a wallet holding real funds.</p>
+<textarea id="mn" rows="2" style="width:100%">abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about</textarea>
+<div class="row">passphrase: <input id="pw"> account index: <input id="ix" type="number" value="0" min="0">
+<button onclick="gen()">New random mnemonic</button><button onclick="derive()">Derive</button></div>
+<pre id="o0">loading libraries…</pre>
+<p class="dim">With the test mnemonic above, m/44'/60'/0'/0/0 must give 0x9858EfFD232B4033E47d90003D41EC34EcaEda94 (compare it with MetaMask/Rabby by importing the same phrase).</p>
+
+<h2>2. Last stretch only: public key → address</h2>
+<textarea id="pub" rows="2" style="width:100%" placeholder="128 hex characters (x||y)"></textarea>
+<div class="row"><button onclick="ex()">Example (private key = 1)</button><button onclick="addr()">Compute</button></div>
+<pre id="o1"></pre>
+
+<h2>3. Keccak-256 ≠ SHA3-256</h2>
+<div class="row"><input id="t" value="abc"><button onclick="cmp()">Hash</button></div>
+<pre id="o2"></pre>
+
+<h2>4. Role of each primitive</h2>
+<pre style="max-height:none">BIP-39     mnemonic (encoding of entropy + checksum) → 512-bit seed via PBKDF2-HMAC-SHA512 (key stretching)
+BIP-32     from the seed, a tree of HD keys via HMAC-SHA512 (key derivation, not generation)
+BIP-44     standard path m/44'/coin'/account'/change/index (Ethereum: coin 60)
+secp256k1  elliptic curve: public key = k·G (public-key crypto, signatures)
+Keccak-256 hash of the public key; address = last 20 bytes
+EIP-55     upper/lower case derived from the address hash = checksum (detects typos, does not protect)
+
+Timeline: RSA 1977 · SHA-2 2001 · BIP-32 2012 · BIP-39 2013 · BIP-44 2014 · SHA-3 2015 · EIP-55 2016
+
+Why several primitives: each step solves a different problem (key management, public/private relation and signatures,
+hashing, error detection). No single algorithm does it all.</pre>
+
+<h2>5. Wallet experiment</h2>
+<div class="txt">
+<p><b>Procedure.</b> Use a throwaway wallet with no funds. (1) Import the test mnemonic from section 1 into MetaMask, Rabby or a similar wallet and compare the first address with the one derived above. (2) Create the second account and compare it with the address derived here for account index 1. (3) Note what the wallet shows you (mnemonic, derivation path, public address, checksummed address) and which of these steps you cannot see.</p>
+<div class="todo">TODO: replace this box with your own observations: wallet used, addresses obtained (and whether they matched the ones computed on this page), and screenshots. These are the results of an experiment on your machine, so they must come from you.</div>
+</div>
+
+<h2>6. Discussion</h2>
+<div class="txt">
+<h3>Generation, derivation, public-key cryptography, hashing, checksum, encoding</h3>
+<ul>
+<li><b>Key generation vs key derivation.</b> Generation creates new secret randomness: BIP-39 draws 128–256 bits of entropy from a cryptographically secure random generator. Derivation is a deterministic function of an existing secret: PBKDF2 turns the mnemonic into a 512-bit seed, and BIP-32 (HMAC-SHA512) turns the seed into a tree of keys. Derivation adds no entropy: the whole tree is exactly as secret as the original entropy (plus the optional passphrase). Its advantage is that a single backup recovers every key.</li>
+<li><b>Public-key cryptography.</b> secp256k1 links a private key k to a public key K = kG. Anyone can verify an ECDSA signature made with k, but only the holder of k can create one. This is the only step that provides ownership and authentication.</li>
+<li><b>Hashing.</b> Keccak-256 compresses the 64-byte public key into 32 bytes and the address keeps the last 20. It is a one-way, collision-resistant function with strong avalanche. In the pipeline, SHA-256 (BIP-39 checksum) and SHA-512 (PBKDF2 and HMAC) are used as well.</li>
+<li><b>Checksum.</b> Both BIP-39 (the last bits of the mnemonic come from SHA-256) and EIP-55 (letter case derived from the hash of the address) add redundancy to detect typing errors. About 15 of the 40 hex characters are letters on average, so EIP-55 gives roughly 15 bits of error detection: a random typo is caught with probability about 1 − 2<sup>−15</sup>. It provides no secrecy and no authentication.</li>
+<li><b>Encoding.</b> Mnemonic words (11 bits per word from a list of 2048), hexadecimal strings and mixed-case text are just reversible representations of the same bytes. They give readability, not security.</li>
+</ul>
+<h3>Why several primitives instead of one algorithm</h3>
+<p>Each step needs a different property. BIP-39/32/44 handle key management: one memorable backup, deterministic recovery and a standard layout (m/44'/60'/0'/0/0 for Ethereum accounts). secp256k1 provides the asymmetric relation between private and public keys and digital signatures, which hashes cannot provide. Keccak-256 provides a short, uniform, one-way identifier. EIP-55 provides cheap error detection without changing the address. Using one algorithm for everything would sacrifice one of these properties (a hash cannot sign, a signature scheme is not a compressing hash), and keeping the roles separate also limits damage if one primitive is weakened. Note that non-hardened BIP-32 derivation has a known caveat: an extended public key plus one child private key reveals the parent private key, which is why the Ethereum path hardens its upper levels.</p>
+<h3>Historical context</h3>
+<p>RSA (1977) introduced practical public-key cryptography. SHA-2 / SHA-512 followed in 2001, and BIP-32 (2012), BIP-39 (2013) and BIP-44 (2014) built wallet standards on top of Bitcoin, using HMAC-SHA512 and PBKDF2-SHA512. NIST standardized SHA-3 in 2015, based on Keccak, the winner of its hash competition. Ethereum adopted Keccak just before the final standard was published, and NIST then changed the padding (domain-separation suffix), so Ethereum's "Keccak-256" differs from the standardized SHA3-256: the same input gives different outputs (section 3). EIP-55 (2016) added the mixed-case checksum afterwards, without changing addresses.</p>
+<h3>SHA-2/SHA-512 vs Keccak/SHA-3</h3>
+<p>Both are cryptographic hash functions, but they are built differently. SHA-2 uses the Merkle–Damgård construction with a compression function (non-truncated SHA-256 and SHA-512 are vulnerable to length-extension attacks). Keccak uses a sponge construction on the 1600-bit permutation Keccak-f, with a rate/capacity split that avoids length extension. SHA3-256 and Keccak-256 share the same core and differ only in the padding/domain-separation bytes (0x06 in the standard, 0x01 in the original), which is enough to give completely different digests.</p>
+<h3>Statistical properties</h3>
+<p>A good hash has uniform-looking outputs and an avalanche effect of about 50% (our HW1 test shows this for Keccak-256). This makes the 160-bit address essentially uniform over its space, so collisions follow the birthday bound of about 2<sup>80</sup> trials, which is infeasible. Private keys must be uniformly random over a space of about 2<sup>256</sup> values; a 12-word mnemonic carries 128 bits of entropy and a 24-word one 256 bits. The seed is 512 bits long, but its entropy is still at most that of the mnemonic (plus passphrase). By contrast, the relation between private and public key is algebraic (see HW1): it is not designed to look random, only to be hard to invert.</p>
+</div>
+
+<script>
+const $=id=>document.getElementById(id), hex2b=h=>h.match(/../g).map(b=>parseInt(b,16)), b2hex=b=>[...b].map(v=>v.toString(16).padStart(2,'0')).join('');
+function eip55(a){const h=keccak256(a);return '0x'+[...a].map((c,i)=>parseInt(h[i],16)>=8?c.toUpperCase():c).join('')}
+function ex(){$('pub').value='79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8'}
+function addr(){
+  const h=$('pub').value.replace(/\s|^0x/g,'');
+  if(!/^[0-9a-fA-F]{128}$/.test(h)){$('o1').textContent='128 hex characters required';return}
+  const hash=keccak256(hex2b(h)),a=hash.slice(-40);
+  $('o1').textContent=`Keccak-256(pubkey) = ${hash}\nlast 20 bytes        = 0x${a}\nEIP-55              = ${eip55(a)}`;
+}
+function cmp(){const t=$('t').value;$('o2').textContent=`Keccak-256 : ${keccak256(t)}\nSHA3-256   : ${sha3_256(t)}\n(different: same Keccak core, different padding/domain separation)`}
+cmp();
+</script>
+<script type="module">
+import {mnemonicToSeedSync,generateMnemonic,validateMnemonic} from 'https://esm.sh/@scure/bip39@1.3.0';
+import {wordlist} from 'https://esm.sh/@scure/bip39@1.3.0/wordlists/english';
+import {HDKey} from 'https://esm.sh/@scure/bip32@1.4.0';
+import {secp256k1} from 'https://esm.sh/@noble/curves@1.4.0/secp256k1';
+window.gen=()=>{$('mn').value=generateMnemonic(wordlist,128);derive()};
+window.derive=()=>{
+  const m=$('mn').value.trim().replace(/\s+/g,' '),path=`m/44'/60'/0'/0/${+$('ix').value}`;
+  if(!validateMnemonic(m,wordlist)){$('o0').textContent='Invalid mnemonic (word not in list or wrong BIP-39 checksum)';return}
+  const seed=mnemonicToSeedSync(m,$('pw').value),master=HDKey.fromMasterSeed(seed),k=master.derive(path);
+  const pub=secp256k1.getPublicKey(k.privateKey,false).slice(1),a=keccak256(pub).slice(-40);
+  $('o0').textContent=`1. BIP-39  valid checksum, ${m.split(' ').length} words\n   seed (512 bit) = ${b2hex(seed)}\n2. BIP-32  master private key = ${b2hex(master.privateKey)}\n3. BIP-44  path ${path}\n   private key  = ${b2hex(k.privateKey)}\n4. secp256k1 public key (x||y) = ${b2hex(pub)}\n5. Keccak-256 → last 20 bytes = 0x${a}\n6. EIP-55  ${eip55(a)}`;
+};
+derive();
+</script></body></html>

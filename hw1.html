@@ -1,0 +1,161 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HW1</title><link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.9.3/sha3.min.js"></script><script src="ec.js"></script></head><body>
+<p><a href="index.html">← home</a></p>
+<h1>HW1 · scalar multiplication on a toy curve</h1>
+
+<h2>1. Parameters</h2>
+<div class="row">y² = x³ + <input id="b" type="number" value="7"> (mod <input id="p" type="number" value="17">)</div>
+<div class="row">G = (<input id="gx" type="number" value="1">, <input id="gy" type="number" value="5">)
+ <button onclick="genG()">find a valid G</button> k = <input id="k" type="number" value="6"></div>
+<div class="row"><button onclick="run()">Compute G…kG</button><button onclick="animate()">Slow animation</button></div>
+<pre id="info" style="max-height:none"></pre>
+<pre id="out"></pre>
+<canvas id="c" width="340" height="340"></canvas>
+
+<h2>2. Statistics over all kG (k = 1 … n-1)</h2>
+<div class="row"><button onclick="stats()">Compute</button><button onclick="orders()">Orders of all points (p ≤ 300)</button></div>
+<canvas id="hx" width="700" height="150"></canvas><canvas id="hy" width="700" height="150"></canvas>
+<pre id="st"></pre>
+
+<h2>3. Avalanche and linearity: curve vs Keccak-256</h2>
+<div class="row"><button onclick="aval()">Compare</button></div>
+<pre id="av"></pre>
+
+<h2>4. Brute-force attack on the ECDLP</h2>
+<div class="row"><button onclick="brute()">Given Q = kG, find k</button><button onclick="bench()">Scaling (p up to 10⁶)</button></div>
+<pre id="bf"></pre>
+
+<h2>5. Discussion</h2>
+<div class="txt">
+<h3>What the default experiment shows</h3>
+<p>The curve y² = x³ + 7 (mod 17) has 18 points (17 affine points plus the point at infinity). The base point G = (1, 5) does not generate the whole group: its order is n = 9, so 9G = ∞ and the sequence kG repeats with period 9. The multiples are (1,5), (2,10), (5,9), (12,1), (12,16), (5,8), (2,7), (1,12): only 8 distinct "public keys" exist, whatever the private key. The "Orders" button confirms the group structure: 1 point of order 2, 2 of order 3, 2 of order 6, 6 of order 9 and 6 of order 18, so the group is cyclic of order 18 and a point of order 18 would generate everything. A small order means the key space is tiny: Q = kG can be inverted by simply trying every k up to n. This is exactly why real curves use a base point of huge prime order (secp256k1: n ≈ 2<sup>256</sup>).</p>
+<h3>Statistical exploration</h3>
+<ul>
+<li><b>Coordinates.</b> The points kG and (n−k)G are opposite: they share x and have y mirrored (y → −y mod 17). With n = 9, each x value therefore appears exactly twice and every y once. This is not randomness but a symmetry of the curve. It also explains why the Pearson correlation between k and x is exactly 0 for the default parameters (x(k) = x(9−k) is symmetric around k = 4.5). Zero linear correlation does not mean independence: x is completely determined by k.</li>
+<li><b>Uniformity.</b> When G generates the whole group, kG visits every point exactly once, so the distribution over points is perfectly uniform, but by construction and not statistically. The chi-square test is therefore almost "too good". With a G of small order the test rejects uniformity, because only a subgroup is visited. Bit frequencies depend strongly on p: with p = 17 the values are 5-bit numbers below 17, so the top bit is mostly 0.</li>
+<li><b>Avalanche.</b> Flipping one bit of k changes about 49% of the (x, y) bits for p = 17 and about 48% for p = 10007 (use the "Compare" button; Keccak-256 gives about 50%). That looks hash-like, but it is largely a small-space effect: two unrelated small numbers differ in about half of their bits anyway.</li>
+<li><b>Structure that a hash does not have.</b> (a+b)G = aG + bG holds in every trial, whereas H(a⊕b) = H(a)⊕H(b) essentially never holds for Keccak-256. Scalar multiplication is a group homomorphism, so Q reveals algebraic relations (e.g. (k+1)G = Q + G) that a hash must not reveal.</li>
+</ul>
+<h3>Which properties matter for a one-way function and which for a hash</h3>
+<p><b>One-way function (scalar multiplication).</b> What matters is: easy forward direction (double-and-add, O(log k) additions), hard inverse (the Elliptic Curve Discrete Logarithm Problem), and a very large prime group order. The best generic attacks, like Pollard's rho, need about √n steps, i.e. ≈ 2<sup>128</sup> for secp256k1. The scaling experiment shows brute force growing linearly with n; extrapolating to n ≈ 2<sup>256</sup> gives about 10<sup>60</sup> years at 10<sup>9</sup> steps per second, and Pollard's rho still about 10<sup>22</sup> years. (Quantum computers running Shor's algorithm would break the ECDLP; that is outside this exercise.) Avalanche, uniformity of outputs and pseudo-randomness are not required for this purpose; indeed the structure of the group is what makes signatures and key derivation (public keys from private keys) possible.</p>
+<p><b>Cryptographic hash function (e.g. Keccak-256).</b> What matters is preimage resistance, second-preimage resistance and collision resistance, a fixed-size output for arbitrary-length input, a strong avalanche effect, outputs that look uniformly random, and no exploitable algebraic structure. Here the "statistical" tests (avalanche, bit balance, uniformity, absence of correlation) are meaningful as sanity checks, although passing them is necessary and not sufficient for security.</p>
+<p><b>Conclusion.</b> Elliptic-curve scalar multiplication is a one-way function based on a hard mathematical problem, not a hash function: it has no fixed-size compression of arbitrary data and it is deliberately algebraic. The statistical properties we measured (avalanche, uniformity, correlation) describe hashes much better than they describe kG, and in the toy case they can even be misleading.</p>
+</div>
+
+<script>
+const $=id=>document.getElementById(id), fmt=P=>P?`(${P[0]}, ${P[1]})`:'∞';
+let C,G,n;
+function setup(){
+  G=[+$('gx').value,+$('gy').value]; C=makeCurve(+$('p').value,+$('b').value);
+  if(!C.on(G)){$('info').textContent='G is not on the curve!';return false}
+  n=C.order(G);
+  $('info').textContent=`Order of G: n = ${n}  (nG = ∞, so kG repeats with period n)`;return true;
+}
+function genG(){const g=makeCurve(+$('p').value,+$('b').value).find();$('gx').value=g[0];$('gy').value=g[1]}
+function run(){
+  if(!setup())return; const k=+$('k').value, m=[];let P=null;
+  for(let i=1;i<=Math.min(k,300);i++){P=C.add(P,G);m.push(P)}
+  const r=k%n;
+  $('out').textContent=m.map((P,i)=>`${i+1}G = ${fmt(P)}`).join('\n')+(k>300?'\n… (first 300 only)':'')+
+   `\n\nTOY PUBLIC KEY  Q = ${k}G = ${fmt(C.mul(k,G))}   (double-and-add)\nPeriodicity: k mod n = ${r}  →  ${r}G = ${fmt(C.mul(r,G))}`;
+  draw(m,m.length);
+}
+function draw(m,upto){
+  const c=$('c'),g=c.getContext('2d'),p=C.p,s=340/p,X=x=>x*s+s/2,Y=y=>340-(y*s+s/2);
+  g.clearRect(0,0,340,340);
+  if(p<=60){g.strokeStyle='#3d2563';for(let i=0;i<p;i++){g.beginPath();g.moveTo(X(i),0);g.lineTo(X(i),340);g.moveTo(0,Y(i));g.lineTo(340,Y(i));g.stroke()}}
+  if(p<=200){g.fillStyle='#6a3fa0';for(let x=0;x<p;x++)for(let y=0;y<p;y++)if(C.on([x,y])){g.beginPath();g.arc(X(x),Y(y),Math.max(1.5,s/6),0,7);g.fill()}}
+  let prev=null;
+  for(let i=0;i<upto;i++){const P=m[i];if(!P)continue;
+    if(prev){g.strokeStyle='#9dff3a';g.beginPath();g.moveTo(X(prev[0]),Y(prev[1]));g.lineTo(X(P[0]),Y(P[1]));g.stroke()}
+    g.fillStyle=i===upto-1?'#ff7a1a':'#9dff3a';g.beginPath();g.arc(X(P[0]),Y(P[1]),Math.max(3,s/4),0,7);g.fill();
+    if(p<=60){g.fillStyle='#e6def2';g.fillText((i+1)+'G',X(P[0])+6,Y(P[1])-6)}prev=P}
+}
+let timer;
+function animate(){
+  if(!setup())return;clearInterval(timer);
+  const m=[];let P=null,i=0;const K=Math.min(+$('k').value,80);
+  timer=setInterval(()=>{i++;P=C.add(P,G);m.push(P);draw(m,i);$('out').textContent=`${i}G = ${fmt(P)}`;if(i>=K)clearInterval(timer)},1000);
+}
+function hist(id,counts,label){
+  const c=$(id),g=c.getContext('2d'),B=Math.min(counts.length,100),w=Math.ceil(counts.length/B),bins=Array(B).fill(0);
+  counts.forEach((v,i)=>bins[Math.floor(i/w)]+=v);const mx=Math.max(...bins,1),bw=c.width/B;
+  g.clearRect(0,0,c.width,c.height);g.fillStyle='#9dff3a';
+  bins.forEach((v,i)=>{const h=v/mx*(c.height-20);g.fillRect(i*bw+1,c.height-h-4,bw-2,h)});
+  g.fillStyle='#e6def2';g.fillText(`${label} (bin width ${w}, max ${mx})`,6,12);
+}
+function Phi(z){const t=1/(1+0.2316419*Math.abs(z)),d=0.3989423*Math.exp(-z*z/2),q=d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.821256+t*1.330274))));return z>0?1-q:q}
+function stats(){
+  if(!setup())return; const p=C.p,pts=[null],fx=Array(p).fill(0),fy=Array(p).fill(0);let P=null;
+  for(let k=1;k<n;k++){P=C.add(P,G);pts.push(P)}
+  const N=n-1,L=(p-1).toString(2).length,bx=Array(L).fill(0),by=Array(L).fill(0);
+  for(let k=1;k<=N;k++){const [x,y]=pts[k];fx[x]++;fy[y]++;for(let b=0;b<L;b++){bx[b]+=(x>>b)&1;by[b]+=(y>>b)&1}}
+  let valid=0;for(let x=0;x<p;x++)if(C.has(x))valid++;
+  const E=N/valid,df=valid-1;let chi=0;for(let x=0;x<p;x++)if(C.has(x))chi+=(fx[x]-E)**2/E;
+  const z=(Math.cbrt(chi/df)-(1-2/(9*df)))/Math.sqrt(2/(9*df)),pv=1-Phi(z);
+  let sk=0,sx=0,skk=0,sxx=0,sxk=0;for(let k=1;k<=N;k++){const x=pts[k][0];sk+=k;sx+=x;skk+=k*k;sxx+=x*x;sxk+=k*x}
+  const r=(N*sxk-sk*sx)/Math.sqrt((N*skk-sk*sk)*(N*sxx-sx*sx));
+  hist('hx',fx,'frequency of x');hist('hy',fy,'frequency of y');
+  const pc=a=>a.map(v=>(100*v/N).toFixed(0)+'%').join(' ');
+  $('st').textContent=`kG points analysed: ${N}   (valid x-coordinates on the curve: ${valid} of ${p})
+Chi-square (uniformity of x over valid x-coordinates): χ² = ${chi.toFixed(1)}, df = ${df}, p-value ≈ ${pv.toFixed(3)}
+% of bits set to 1 (bit0 … bit${L-1})   x: ${pc(bx)}\n                                        y: ${pc(by)}
+Pearson correlation between k and x: r = ${r.toFixed(3)}
+
+Reading: if G generates the whole group, kG visits every point exactly once → a "perfect" distribution,
+but a perfectly structured (non-random) one. If G has a small order the points repeat and χ² blows up.`;
+}
+function orders(){
+  if(!setup())return; const p=C.p; if(p>300){$('st').textContent='Use p ≤ 300';return}
+  const all=[];for(let x=0;x<p;x++)for(let y=0;y<p;y++)if(C.on([x,y]))all.push([x,y]);
+  const cnt={};all.forEach(P=>{const o=C.order(P);cnt[o]=(cnt[o]||0)+1});
+  $('st').textContent=`Points on the curve: ${all.length} + ∞ = ${all.length+1}\nPoint order → how many points have that order:\n`+
+   Object.entries(cnt).map(([o,c])=>`  order ${o}: ${c}`).join('\n')+
+   `\n\nSecurity: with a small n it takes only n trials to find k. That is why G is chosen with a huge prime order (secp256k1: n ≈ 2²⁵⁶).`;
+}
+const pop=v=>{let c=0;while(v){c+=v&1;v>>=1}return c};
+function aval(){
+  if(!setup())return; const L2=2*(C.p-1).toString(2).length,nb=n.toString(2).length;
+  let tot=0,cnt=0;const step=Math.max(1,Math.floor((n-1)/3000));
+  for(let k=1;k<n;k+=step)for(let i=0;i<nb;i++){const k2=k^(1<<i);if(k2>=1&&k2<n){tot+=pop(C.mul(k,G)[0]^C.mul(k2,G)[0])+pop(C.mul(k,G)[1]^C.mul(k2,G)[1]);cnt++}}
+  let th=0;const T=2000;
+  for(let t=0;t<T;t++){const a=crypto.getRandomValues(new Uint8Array(32)),b=a.slice(),i=Math.floor(Math.random()*256);b[i>>3]^=1<<(i&7);
+    const h1=keccak256.array(a),h2=keccak256.array(b);for(let j=0;j<32;j++)th+=pop(h1[j]^h2[j])}
+  let lin=0,linH=0;const M=300;
+  for(let t=0;t<M;t++){const a=1+Math.floor(Math.random()*(n-1)),b=1+Math.floor(Math.random()*(n-1)),A=C.mul(a,G),B=C.mul(b,G),S=C.mul((a+b)%n,G),T=C.add(A,B);
+    if((!S&&!T)||(S&&T&&S[0]===T[0]&&S[1]===T[1]))lin++;
+    const x=crypto.getRandomValues(new Uint8Array(32)),y=crypto.getRandomValues(new Uint8Array(32)),xy=x.map((v,i)=>v^y[i]),hx=keccak256.array(x),hy=keccak256.array(y),hxy=keccak256.array(xy);
+    if(hxy.every((v,i)=>v===(hx[i]^hy[i])))linH++}
+  $('av').textContent=`AVALANCHE (flipping 1 input bit)
+  toy curve  : ${(100*tot/cnt/L2).toFixed(1)}% of the (x,y) bits change   (ideal hash: 50%)
+  Keccak-256 : ${(100*th/T/256).toFixed(1)}% of the 256 bits change        (${T} trials)
+
+LINEARITY: (a+b)G = aG + bG ?
+  toy curve  : true in ${lin}/${M} cases
+  Keccak-256 : H(a⊕b) = H(a)⊕H(b) in ${linH}/${M} cases
+
+Reading: on the toy curve the coordinates may look "mixed" (tiny space), but there is an algebraic structure
+(a homomorphism) that a hash does not have. The security of kG comes not from avalanche/uniformity but from the hardness of the ECDLP.`;
+}
+function brute(){
+  if(!setup())return; const k=+$('k').value%n||n,Q=C.mul(k,G);
+  const t0=performance.now(),j=C.dlog(Q,G),ms=performance.now()-t0;
+  $('bf').textContent=`Q = ${fmt(Q)} → found k = ${j} in ${j} steps, ${ms.toFixed(2)} ms`;
+}
+async function bench(){
+  let out='p            n (order G)   steps      ms        steps/s\n',rate=0;
+  for(const p of [1009,10007,100003,1000003]){
+    $('bf').textContent=out+`… p = ${p}`;await new Promise(r=>setTimeout(r,30));
+    const c=makeCurve(p,7),g=c.find(),N=c.order(g),Q=c.mul(N-1,g),t0=performance.now(),j=c.dlog(Q,g),ms=performance.now()-t0;
+    rate=j/(ms/1000);out+=`${String(p).padEnd(12)} ${String(N).padEnd(13)} ${String(j).padEnd(10)} ${ms.toFixed(0).padEnd(9)} ${rate.toExponential(2)}\n`;
+  }
+  const y=e=>(2**e/rate/3.156e7).toExponential(2);
+  $('bf').textContent=out+`\nTime grows linearly with n (brute force = O(n)).
+secp256k1 (n ≈ 2²⁵⁶), at the speed measured here (${rate.toExponential(1)} additions/s, much faster than real 256-bit ones):
+  brute force 2²⁵⁶ steps ≈ ${y(256)} years
+  Pollard rho ≈ 2¹²⁸ steps ≈ ${y(128)} years
+(age of the universe ≈ 1.4e10 years)`;
+}
+run();
+</script></body></html>

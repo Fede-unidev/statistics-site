@@ -1,0 +1,144 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HW5</title><link rel="stylesheet" href="style.css"><script src="welford.js"></script>
+<style>.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:.5rem 0}.grid canvas{width:100%;height:auto}.grid .h{color:var(--ac);font-size:.85rem}select{background:var(--card);color:var(--fg);border:1px solid var(--bd);padding:.3rem}</style></head><body>
+<p><a href="index.html">← home</a></p>
+<h1>HW5 · Welford's recurrence and sampling statistics</h1>
+
+<h2>Ex. 1 · Welford's recurrence formulas</h2>
+<div class="txt">
+<p>Notation: x<sub>1</sub>, x<sub>2</sub>, … are the data, M<sub>k</sub> the mean of the first k values, SS<sub>k</sub> = Σ<sub>i≤k</sub>(x<sub>i</sub> − M<sub>k</sub>)² the sum of squares about the mean, and δ<sub>k</sub> = x<sub>k</sub> − M<sub>k−1</sub> the "surprise" of the new value.</p>
+</div>
+<pre style="max-height:none">Knuth (mean)
+  M_k = (1/k) Σ_{i≤k} x_i = ((k−1)·M_{k−1} + x_k)/k = M_{k−1} + (x_k − M_{k−1})/k = M_{k−1} + δ_k/k
+
+Two consequences, used below
+  M_k − M_{k−1} = δ_k/k          x_k − M_k = δ_k − δ_k/k = δ_k (k−1)/k
+
+Sum of squares (same idea: update the old quantity instead of recomputing)
+  For i < k:   x_i − M_k = (x_i − M_{k−1}) − δ_k/k
+  SS_k = Σ_{i<k} [(x_i − M_{k−1}) − δ_k/k]² + (x_k − M_k)²
+       = Σ_{i<k}(x_i − M_{k−1})²  −  2(δ_k/k)·Σ_{i<k}(x_i − M_{k−1})  +  (k−1)δ_k²/k²  +  (x_k − M_k)²
+         \_____ SS_{k−1} _____/            \_______ = 0 ________/
+       = SS_{k−1} + (k−1)δ_k²/k² + (k−1)²δ_k²/k²
+       = SS_{k−1} + (k−1)·δ_k²/k
+       = SS_{k−1} + δ_k · (x_k − M_k)                      (because x_k − M_k = δ_k (k−1)/k)
+
+Variance
+  population variance   σ̂²_k = SS_k / k
+  sample variance       s²_k  = SS_k / (k−1)        (k ≥ 2)
+  directly on s²:  SS_k = (k−2)s²_{k−1} + (k−1)δ_k²/k   ⇒   s²_k = ((k−2)/(k−1))·s²_{k−1} + δ_k²/k
+
+Start: M_0 = 0, SS_0 = 0 (then M_1 = x_1 and SS_1 = 0).</pre>
+<p>Code: the core is 3 statements. Using the already updated mean in the last one is exactly <code>δ_k·(x_k − M_k)</code>.</p>
+<pre style="max-height:none">let M = 0, S = 0, k = 0;
+for (const x of data) {
+  k++;
+  const d = x - M;   // 1: δ_k
+  M += d / k;        // 2: Knuth: M_k = M_{k-1} + δ_k / k
+  S += d * (x - M);  // 3: SS_k = SS_{k-1} + δ_k (x_k - M_k)
+}
+// mean = M,  SS = S,  sample variance = S / (k - 1)</pre>
+
+<h3 style="color:var(--ac2)">Try it</h3>
+<div class="row">data (comma separated): <input id="xs" value="4, 7, 13, 16" style="width:18rem"><button onclick="steps()">Step by step</button>
+offset: <input id="off" type="number" value="1000000000" style="width:11rem"><button onclick="stab()">Numerical stability test</button></div>
+<pre id="o1"></pre>
+
+<h2>Ex. 2 · Sampling mean and variance of m hackers</h2>
+<p class="dim">Each of m hackers attempts n systems and gets one score in {0,…,10} per system, i.i.d. from a fixed distribution with mean μ and variance σ². For each hacker, Welford gives the sample mean x̄ and the sample variance s² (divisor n−1) of the n scores. The experiment is repeated (with fresh scores) for every n in the list.</p>
+<div class="row">score distribution:
+<select id="dist" onchange="$('bp').disabled=this.value!=='binom'"><option value="uniform">uniform on {0,…,10}</option><option value="binom">Binomial(10, p)</option><option value="geom">truncated geometric, P(k) ∝ 0.7<sup>k</sup></option></select>
+p = <input id="bp" type="number" value="0.3" step="0.05" min="0.05" max="0.95" disabled>
+m = <input id="m" type="number" value="2000" min="20">
+n values: <input id="ns" value="2,5,10,50,100,1000" style="width:14rem"><button onclick="run()">Run</button></div>
+<pre id="so" style="max-height:none">press Run</pre>
+<canvas id="pm" width="420" height="110"></canvas>
+<h3 style="color:var(--ac2)">Averages and variability</h3>
+<pre id="st" style="max-height:none"></pre>
+<h3 style="color:var(--ac2)">Distribution of x̄ and s² over the hackers (rows: n)</h3>
+<p class="dim">Green: empirical histogram. Orange: N(μ, σ²/n) for x̄; vertical line at σ² for s². Same axis within a column; values outside it are lumped into the edge bins.</p>
+<div id="grid" class="grid"></div>
+<h3 style="color:var(--ac2)">Standard deviation of x̄ and s² against n (log–log)</h3>
+<canvas id="ll" width="620" height="280"></canvas>
+
+<h2>Discussion</h2>
+<div class="txt">
+<h3>Why Welford</h3>
+<p>The algorithm needs one pass and O(1) memory: a new score updates (k, M, SS) and can be discarded, which is what a stream of penetration attempts requires. It is also numerically stable. The textbook formula (Σx² − (Σx)²/n)/(n−1) subtracts two huge, nearly equal numbers and loses all precision when the mean is large compared with the spread; the stability test above returns a wrong, even <i>negative</i>, variance for data around 10⁹, while Welford returns the exact value because it only manipulates deviations from the running mean.</p>
+<h3>Conclusions from the comparison</h3>
+<ul>
+<li><b>The average of the sample means matches μ</b> for every n, even n = 2. The sample mean is an unbiased estimator: E[x̄] = μ. The small gaps in the table are Monte-Carlo noise (the z-score shows them in standard errors of the average over m hackers, and they are typically within about ±2).</li>
+<li><b>The average of the sample variances matches σ² when the divisor is n−1</b>: E[s²] = σ². With divisor n the average is smaller by the factor (n−1)/n (the third column of the table; for n = 2 it is half of σ²). This is the reason for Bessel's correction: deviations are measured from x̄, which is itself fitted to the same data and is closer to them than μ is, so SS is too small by exactly one degree of freedom.</li>
+<li><b>Variability.</b> Var(x̄) = σ²/n, so the spread of the sample means over the hackers shrinks like 1/√n. The variance of s² is μ<sub>4</sub>/n − σ⁴(n−3)/(n(n−1)) (μ<sub>4</sub> = fourth central moment), also of order 1/n for large n, so both estimators concentrate around the true value as n grows (they are consistent, in line with the law of large numbers of HW4). The table compares the empirical and the exact theoretical standard deviations and the log–log plot shows slope −1/2 for both. Two differences: s² is noisier than x̄ in relative terms, and its noise depends on the tails of the distribution (fourth moment): the heavy-tailed truncated geometric gives a much more variable s² than the uniform or the binomial at the same n.</li>
+<li><b>Role of m.</b> m only reduces the Monte-Carlo noise of our averages (like 1/√m) so that bias or its absence can be seen; the variability of each single hacker's estimate is controlled by n. A real analyst has just one hacker, one sample: the histograms show how far x̄ and s² can be from the truth in that case. For large n the histogram of x̄ is close to N(μ, σ²/n) (CLT), while s² is skewed for small n.</li>
+</ul>
+<h3>Why this matters in inferential statistics</h3>
+<p>In practice μ and σ² are unknown and are estimated from a sample. Unbiasedness and consistency say that x̄ and s² are right on average and converge to the parameters as n grows; knowing Var(x̄) = σ²/n and estimating it with s²/n gives the standard error, which is the basis of confidence intervals and t-tests (μ is within x̄ ± t·s/√n); the dependence of Var(s²) on μ<sub>4</sub> warns that variance estimates (and tests on variances) are fragile for heavy-tailed data. The simulation here is the empirical counterpart of these facts: the m hackers sample the <i>sampling distribution</i> of the estimators.</p>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const fm=v=>v===0?'0':(Math.abs(v)>=1e4||Math.abs(v)<1e-2)?v.toExponential(2):v.toFixed(3);
+const parse=s=>s.split(',').map(Number).filter(v=>!isNaN(v)&&String(v)!=='');
+function steps(){
+  const a=parse($('xs').value);if(a.length<2){$('o1').textContent='Give at least 2 numbers.';return}
+  let M=0,S=0,k=0,o='k   x_k        δ_k=x_k−M_{k−1}   M_k          SS_k          s²_k=SS_k/(k−1)   SS_k/k\n';
+  for(const x of a){k++;const d=x-M;M+=d/k;S+=d*(x-M);o+=`${String(k).padEnd(4)}${String(x).padEnd(11)}${fm(d).padEnd(18)}${fm(M).padEnd(13)}${fm(S).padEnd(14)}${(k>1?fm(S/(k-1)):'–').padEnd(18)}${fm(S/k)}\n`}
+  const m2=a.reduce((s,v)=>s+v,0)/a.length,ss2=a.reduce((s,v)=>s+(v-m2)**2,0);
+  $('o1').textContent=o+`\ncheck, two-pass: mean = ${fm(m2)}, SS = ${fm(ss2)}, s² = ${fm(ss2/(a.length-1))}`}
+function stab(){
+  const a=parse($('xs').value),off=+$('off').value;if(a.length<2)return;
+  const b=a.map(x=>x+off),n=b.length,sx=b.reduce((s,v)=>s+v,0),sxx=b.reduce((s,v)=>s+v*v,0),naive=(sxx-sx*sx/n)/(n-1);
+  const w=WEL.welford(b),mb=sx/n,two=b.reduce((s,v)=>s+(v-mb)**2,0)/(n-1),ref=WEL.welford(a).s2;
+  $('o1').textContent=`data + ${off}\n  Welford              s² = ${w.s2}\n  two-pass             s² = ${two}\n  naive Σx²−(Σx)²/n    s² = ${naive}   ← cancellation error\n  exact (offset-invariant) = ${ref}`}
+
+function run(){
+  const dist=$('dist').value,p=Math.min(.95,Math.max(.05,+$('bp').value)),m=Math.max(20,Math.round(+$('m').value));
+  const ns=[...new Set($('ns').value.split(',').map(s=>Math.round(+s)).filter(v=>v>=2))].sort((a,b)=>a-b).slice(0,8);
+  if(!ns.length){$('so').textContent='Give at least one n ≥ 2.';return}
+  if(m*ns.reduce((s,v)=>s+v,0)>1e8){$('so').textContent='Too large: m × Σn must be ≤ 10⁸.';return}
+  $('so').textContent='simulating…';setTimeout(()=>go(dist,p,m,ns),30);
+}
+function pmfPlot(pmf,mu){
+  const c=$('pm'),g=c.getContext('2d'),W=c.width,H=c.height,mx=Math.max(...pmf),w=(W-20)/11;g.clearRect(0,0,W,H);g.fillStyle='#9dff3a';
+  pmf.forEach((q,k)=>{const h=q/mx*(H-34);g.fillRect(10+k*w+2,H-18-h,w-4,h)});g.fillStyle='#e6def2';g.font='11px monospace';
+  pmf.forEach((q,k)=>g.fillText(k,10+k*w+w/2-3,H-5));g.fillText('score distribution P(k)',10,12);g.strokeStyle='#ff7a1a';
+  const xm=10+mu*w+w/2;g.beginPath();g.moveTo(xm,16);g.lineTo(xm,H-18);g.stroke();g.fillStyle='#ff7a1a';g.fillText('μ',xm+3,26)}
+function hist1(cv,vals,lo,hi,n,over){
+  const g=cv.getContext('2d'),W=cv.width,H=cv.height,B=40,cnt=new Float64Array(B),w=(hi-lo)/B;
+  for(const v of vals){let j=Math.floor((v-lo)/w);j=Math.max(0,Math.min(B-1,j));cnt[j]++}
+  const dens=Array.from(cnt,c=>c/(vals.length*w));let ym=Math.max(...dens);if(over.pdf)ym=Math.max(ym,over.pdf(over.mu)||0);ym*=1.1;
+  const X=x=>4+(x-lo)/(hi-lo)*(W-8),Y=d=>H-14-d/ym*(H-26);g.clearRect(0,0,W,H);g.fillStyle='#9dff3a';
+  dens.forEach((d,j)=>{const y=Y(d);g.fillRect(X(lo+j*w),y,Math.max(1,X(lo+(j+1)*w)-X(lo+j*w)-1),H-14-y)});
+  g.strokeStyle='#ff7a1a';g.beginPath();
+  if(over.pdf){for(let i=0;i<=120;i++){const x=lo+(hi-lo)*i/120,y=Y(over.pdf(x));i?g.lineTo(X(x),y):g.moveTo(X(x),y)}}else{g.moveTo(X(over.mu),8);g.lineTo(X(over.mu),H-14)}
+  g.stroke();g.fillStyle='#e6def2';g.font='11px monospace';g.fillText('n = '+n,6,12);g.fillText(lo.toPrecision(3),4,H-3);const t=hi.toPrecision(3);g.fillText(t,W-4-6.6*t.length,H-3)}
+function loglog(ns,series){
+  const c=$('ll'),g=c.getContext('2d'),W=c.width,H=c.height,all=series.flatMap(s=>s.y.filter(v=>v>0)),lx=Math.log10(ns[0]),hx=Math.log10(ns[ns.length-1]);
+  const ly=Math.floor(Math.log10(Math.min(...all))),hy=Math.ceil(Math.log10(Math.max(...all))),X=n=>40+(Math.log10(n)-lx)/Math.max(hx-lx,1e-9)*(W-60),Y=v=>H-26-(Math.log10(v)-ly)/(hy-ly)*(H-40);
+  g.clearRect(0,0,W,H);g.strokeStyle='#3d2563';g.fillStyle='#8a7aa6';g.font='11px monospace';
+  for(let e=ly;e<=hy;e++){g.beginPath();g.moveTo(40,Y(10**e));g.lineTo(W-20,Y(10**e));g.stroke();g.fillText('1e'+e,4,Y(10**e)+3)}
+  ns.forEach(n=>g.fillText(n,X(n)-8,H-10));
+  series.forEach(s=>{g.strokeStyle=s.th?'#ff7a1a':s.col;g.fillStyle=s.col;g.setLineDash(s.th?[5,3]:[]);g.beginPath();s.y.forEach((v,i)=>i?g.lineTo(X(ns[i]),Y(v)):g.moveTo(X(ns[i]),Y(v)));g.stroke();g.setLineDash([]);
+    if(!s.th)s.y.forEach((v,i)=>{g.beginPath();g.arc(X(ns[i]),Y(v),3.5,0,7);g.fill()})});
+  g.fillStyle='#9dff3a';g.fillText('● sd of x̄ (empirical)',W-190,14);g.fillStyle='#e6def2';g.fillText('● sd of s² (empirical)',W-190,28);g.fillStyle='#ff7a1a';g.fillText('- - exact theory',W-190,42)}
+function go(dist,p,m,ns){
+  const pmf=WEL.pmfOf(dist,p),mom=WEL.moments(pmf),sig=Math.sqrt(mom.s2),t0=performance.now(),res=ns.map(n=>WEL.experiment(pmf,m,n)),ms=performance.now()-t0;
+  pmfPlot(pmf,mom.mu);
+  let o=`μ = ${fm(mom.mu)}   σ² = ${fm(mom.s2)}   μ4 = ${fm(mom.mu4)}   excess kurtosis = ${fm(mom.mu4/mom.s2**2-3)}   m = ${m} hackers\n\n`;
+  o+='n'.padEnd(6)+'avg(x̄)'.padEnd(10)+'z'.padEnd(8)+'avg(s²)'.padEnd(10)+'z'.padEnd(8)+'avg(SS/n)'.padEnd(11)+'σ²(n−1)/n'.padEnd(11)+'sd(x̄) emp / th'.padEnd(18)+'sd(s²) emp / th\n';
+  const smE=[],smT=[],svE=[],svT=[];
+  ns.forEach((n,i)=>{const {means,vars}=res[i],am=WEL.mean(means),av=WEL.mean(vars),sdm=WEL.sd(means),sdv=WEL.sd(vars),th=WEL.theory(mom,n);
+    smE.push(sdm);smT.push(th.sdMean);svE.push(sdv);svT.push(th.sdVar);
+    o+=String(n).padEnd(6)+fm(am).padEnd(10)+fm((am-mom.mu)/(sdm/Math.sqrt(m))).padEnd(8)+fm(av).padEnd(10)+fm((av-mom.s2)/(sdv/Math.sqrt(m))).padEnd(8)+fm(av*(n-1)/n).padEnd(11)+fm(mom.s2*(n-1)/n).padEnd(11)+`${fm(sdm)} / ${fm(th.sdMean)}`.padEnd(18)+`${fm(sdv)} / ${fm(th.sdVar)}\n`});
+  o+=`\nz = (average − true value) / standard error of the average over the m hackers; |z| ≲ 2 means the gap is just Monte-Carlo noise.\nCompare avg(x̄) with μ, avg(s²) with σ², and avg(SS/n) (divisor n) with σ²(n−1)/n.`;
+  $('st').textContent=o;
+  const ref=ns[Math.min(1,ns.length-1)],sdr=Math.sqrt(mom.s2/ref),sv=WEL.theory(mom,ref).sdVar;
+  const mlo=Math.max(0,mom.mu-4*sdr),mhi=Math.min(10,mom.mu+4*sdr),vhi=mom.s2+4*sv;
+  const grid=$('grid');grid.innerHTML='';['sample mean x̄','sample variance s²'].forEach(t=>{const d=document.createElement('div');d.className='h';d.textContent=t;grid.appendChild(d)});
+  ns.forEach((n,i)=>{const sd=Math.sqrt(mom.s2/n),a=document.createElement('canvas'),b=document.createElement('canvas');a.width=b.width=300;a.height=b.height=100;grid.appendChild(a);grid.appendChild(b);
+    hist1(a,res[i].means,mlo,mhi,n,{mu:mom.mu,pdf:x=>Math.exp(-((x-mom.mu)**2)/(2*sd*sd))/(sd*Math.sqrt(2*Math.PI))});hist1(b,res[i].vars,0,vhi,n,{mu:mom.s2})});
+  loglog(ns,[{y:smT,th:1},{y:svT,th:1},{y:smE,col:'#9dff3a'},{y:svE,col:'#e6def2'}]);
+  $('so').textContent=`done in ${ms.toFixed(0)} ms (${m} hackers × n = ${ns.join(', ')})`;
+}
+</script></body></html>

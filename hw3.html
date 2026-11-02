@@ -1,0 +1,149 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HW3</title><link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.9.3/sha3.min.js"></script><script src="secp.js"></script><script src="caesar.js"></script></head><body>
+<p><a href="index.html">← home</a></p>
+<h1>HW3 · encryption, Caesar cipher and cryptanalysis</h1>
+
+<h2>1. Message</h2>
+<input id="msg" value="Attack at dawn" style="width:100%">
+
+<h2>2. Toy ECC encryption (ECIES-style, secp256k1, small private key)</h2>
+<div class="row">private key size:
+<select id="bits" style="background:var(--card);color:var(--fg);border:1px solid var(--bd);padding:.3rem"><option>16</option><option selected>20</option><option>24</option><option>32</option></select> bits
+<button onclick="genKeys()">Generate key pair</button><button onclick="encECC()">Encrypt</button><button onclick="decECC()">Decrypt with k</button></div>
+<pre id="eo"></pre>
+
+<h2>3. Caesar cipher</h2>
+<div class="row">key (0–25): <input id="ck" type="number" value="3" min="0" max="25"><button onclick="caeEnc()">Encrypt</button><button onclick="caeDec()">Decrypt</button></div>
+<pre id="co"></pre>
+
+<h2>4. Statistical comparison of the two schemes</h2>
+<div class="row"><button onclick="compare()">Compare on 5000 letters</button></div>
+<canvas id="h1" width="280" height="130"></canvas><canvas id="h2" width="280" height="130"></canvas><canvas id="h3" width="280" height="130"></canvas>
+<pre id="so"></pre>
+
+<h2>5. Statistical cryptanalysis of the Caesar cipher</h2>
+<p class="dim" id="cs">loading corpus…</p>
+<canvas id="hr" width="700" height="130"></canvas>
+<p>Ciphertext to attack (letters only count; try shorter and shorter texts):</p>
+<textarea id="cx" rows="3" style="width:100%"></textarea>
+<div class="row"><button onclick="useCae()">Use Caesar output of section 3</button><button onclick="crack()">Crack</button>
+trials per length: <input id="tr" type="number" value="300" min="20"><button onclick="experiment()">Run experiment (length × method)</button></div>
+<pre id="ao5"></pre>
+
+<h2>6. Attack on the toy ECC scheme (restricted private key)</h2>
+<p class="dim">The attacker only uses public data: Q, R and the ciphertext. The private key k is never read.</p>
+<div class="row"><button onclick="attack('brute')">Brute force on k</button><button onclick="attack('bsgs')">Baby-step giant-step</button></div>
+<pre id="ao"></pre>
+
+<h2>7. Discussion</h2>
+<div class="txt">
+<h3>The toy ECC scheme: steps and role of the keys</h3>
+<p>The scheme is an ECIES/ElGamal-style hybrid on the real secp256k1 curve, with the private key restricted to a small range (here 16–32 bits instead of about 256). <b>Keys.</b> The private key k is a secret integer; the public key is the point Q = kG and can be published, because recovering k from Q is the Elliptic Curve Discrete Logarithm Problem. <b>Encryption</b> (needs only Q): (1) pick a fresh random ephemeral scalar r; (2) compute R = rG; (3) compute the shared point S = rQ; (4) derive a keystream from S, here Keccak-256(S.x ‖ counter); (5) XOR it with the message bytes to get c. The pair (R, c) is sent. <b>Decryption</b> (needs k): compute S = kR = k(rG) = r(kG) = rQ, regenerate the same keystream and XOR again. Anybody who sees only (Q, R, c) would have to solve a Diffie–Hellman problem to obtain S. The elliptic-curve part therefore only agrees on a secret; the bulk encryption is a stream cipher. (Mapping a message directly onto curve points is awkward and limited in length, which is why the hybrid design is used.)</p>
+<h3>Similarities and differences with the Caesar cipher</h3>
+<ul>
+<li><b>Procedure.</b> Both are "add a secret stream and subtract it again". Caesar adds the same constant k (mod 26) to every letter; the ECC scheme XORs each byte with a different pseudo-random byte. Caesar is symmetric (same key to encrypt and decrypt) and deterministic; the ECC scheme is asymmetric (Q encrypts, k decrypts) and probabilistic: a fresh r gives a different ciphertext every time, while Caesar always gives the same one for the same message.</li>
+<li><b>Key space.</b> Caesar has 26 keys (about 4.7 bits). The toy ECC scheme has 2<sup>bits</sup> private keys, a number we choose; a properly configured one has about 2<sup>256</sup> (≈ 128-bit security, because of generic square-root attacks).</li>
+<li><b>Statistical properties.</b> Caesar is a monoalphabetic substitution: the letter histogram is only rotated, so entropy and all frequency patterns of the language are preserved. This is exactly what the statistical attack exploits. The ECC-derived keystream is pseudo-random, so the ciphertext bytes look uniform (entropy close to 8 bits/byte in section 4) and carry no language statistics. Neither scheme has diffusion: changing one plaintext symbol changes only one ciphertext symbol, which also makes both malleable.</li>
+</ul>
+<h3>Statistical attack on the Caesar cipher: effectiveness and limits</h3>
+<p>Using a training corpus (Shakespeare, 90%) we build letter, bigram and trigram statistics, and test on a held-out 10% so the attack never sees its own test text. The attack tries all 26 keys and keeps the one whose decryption looks most like English according to a score. Measured accuracy (400 random keys and text windows per length, one run; it varies a little, run section 5 to reproduce):</p>
+<pre style="max-height:none">length   peak-E  chi²   unigram  bigram  trigram  words
+5        16%     42%    46%      65%     76%      18%
+10       22%     81%    83%      96%     99%      37%
+20       30%     95%    99%      100%    100%     60%
+50       38%     100%   100%     100%    100%     89%
+100      54%     100%   100%     100%    100%     98%
+500      76%     100%   100%     100%    100%     100%</pre>
+<p>Longer ciphertexts are easier because their histogram converges to the language distribution. Very short ones (under about 10 letters) are ambiguous: several shifts can give plausible text, and with 5 letters even the best method fails about one time in four. The simple "most frequent letter is E" heuristic is fragile because it depends on a single count, so it needs hundreds of letters; scoring all 26 candidates with the full distribution (chi², unigram log-likelihood) uses much more information. N-gram scoring is best, because it also uses letter order, so it needs the fewest letters. The "exhaustive search + common words" approach also works but needs longer text and, with word spaces removed, is less natural. Limitations: the attack assumes the language is known and the text is long enough and typical; a corpus of a different style or language (or text without the letter E, or with many names) shifts the statistics; and it only works because the cipher preserves the statistics of the plaintext.</p>
+<h3>Attack on the restricted private key and why it does not scale</h3>
+<p>Because k is below 2<sup>bits</sup>, Q = kG can be inverted. <b>Exhaustive search</b> computes G, 2G, 3G, … until it equals Q: O(2<sup>bits</sup>) point additions, with a trivial success test (no need to recognize the plaintext). <b>Baby-step giant-step</b> stores about 2<sup>bits/2</sup> points jG and then walks Q − i·mG until it hits the table, so it needs only about 2<sup>bits/2</sup> time and memory: in our tests a 32-bit key falls in seconds, while exhaustive search would take hours at about 10<sup>5</sup> additions per second in the browser. With the recovered k we compute S = kR and decrypt like the receiver.</p>
+<p><b>Difference from the Caesar attack.</b> The Caesar attack is ciphertext-only and statistical: it needs a model of the language and gets worse with short messages. The ECC attack is purely algebraic: it does not use the message statistics at all (the ciphertext looks random) and works identically for one byte or one megabyte, because it attacks the public key Q, and success is checked exactly by Q = kG. What both share is that the key space is searchable. <b>Why it fails on a proper configuration:</b> with k uniform in a group of order n ≈ 2<sup>256</sup>, exhaustive search needs about 10<sup>77</sup> additions and baby-step giant-step (or Pollard's rho, which needs almost no memory) about 2<sup>128</sup> ≈ 3·10<sup>38</sup> operations, and no better generic classical attack is known for secp256k1. Even at one billion additions per second this is on the order of 10<sup>22</sup> years for the square-root attacks; the page prints an estimate based on the speed measured on your machine. (A large quantum computer running Shor's algorithm would change this, which is outside the scope here.)</p>
+<h3>Weaknesses from the design of the toy scheme itself</h3>
+<ul>
+<li><b>Restricted key space (the main flaw).</b> Everything above. A small ephemeral r would be just as bad: the attacker could recover r from R and compute S = rQ.</li>
+<li><b>No authentication.</b> The XOR stream makes ciphertexts malleable: flipping a ciphertext bit flips the same plaintext bit, and nobody notices. A real scheme adds a MAC or uses authenticated encryption.</li>
+<li><b>Ephemeral-key reuse.</b> Reusing r produces the same keystream, so the XOR of two ciphertexts equals the XOR of the two plaintexts.</li>
+<li><b>Missing validation and metadata.</b> The receiver should check that R is on the curve and not the point at infinity, and the ciphertext leaks the message length. The key derivation also has no domain separation (no context label).</li>
+<li><b>Static receiver key.</b> If k is ever compromised, all past messages can be decrypted, since every R is transmitted in clear; there is no forward secrecy for the receiver.</li>
+</ul>
+<p>The first weakness comes from the restriction of the key range; the others would remain even with a full-size key.</p>
+</div>
+
+<script>
+const $=id=>document.getElementById(id), TE=new TextEncoder(), TD=new TextDecoder(), G=SECP.G;
+let kp=null,ct=null,M=null,test=null,rate=0;
+fetch('corpus.txt').then(r=>r.text()).then(t=>{const cut=Math.floor(t.length*.9);M=CAE.model(t.slice(0,cut));test=CAE.letters(t.slice(cut));
+  bars('hr',M.p,'reference letter frequencies A–Z (training corpus)');
+  $('cs').textContent=`Corpus (Shakespeare, public domain): ${M.n} training letters, ${test.length} held-out test letters.`}).catch(()=>$('cs').textContent='Could not load corpus.txt');
+function bars(id,a,label){const c=$(id),g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);const mx=Math.max(...a,1e-9),w=c.width/a.length;
+  g.fillStyle='#9dff3a';a.forEach((v,i)=>{const h=v/mx*(c.height-22);g.fillRect(i*w+1,c.height-h-3,Math.max(1,w-2),h)});g.fillStyle='#e6def2';g.fillText(label,6,12)}
+const ent=a=>{const n=a.reduce((s,v)=>s+v,0);return -a.reduce((s,v)=>s+(v?v/n*Math.log2(v/n):0),0)};
+function genKeys(){const bits=+$('bits').value,k=SECP.rand(bits);kp={k,Q:SECP.mul(k,G),bits};ct=null;
+  $('eo').textContent=`private key k (${bits} bits) = 0x${k.toString(16)}\npublic key  Q = kG    = ${SECP.comp(kp.Q)}`}
+function encECC(){
+  if(!kp)genKeys();
+  const r=(SECP.rand(256)%SECP.N)||1n,bytes=[...TE.encode($('msg').value)],e=SECP.encrypt(bytes,kp.Q,r),S=SECP.mul(r,kp.Q);ct={R:e.R,c:e.c};
+  $('eo').textContent=`private key k (${kp.bits} bits) = 0x${kp.k.toString(16)}\npublic key  Q = kG    = ${SECP.comp(kp.Q)}\n
+ENCRYPTION (sender, knows only Q)
+ 1. ephemeral r (256-bit random) = 0x${r.toString(16)}
+ 2. R = rG       = ${SECP.comp(e.R)}
+ 3. S = rQ       : S.x = ${SECP.hex(S[0])}
+ 4. keystream    = Keccak256(S.x‖0)‖Keccak256(S.x‖1)… = ${SECP.b2h(SECP.stream(S,bytes.length))}
+ 5. c = m XOR keystream = ${SECP.b2h(e.c)}
+Transmitted: (R, c)`}
+function decECC(){
+  if(!ct){$('eo').textContent+='\nEncrypt first.';return}
+  const m=SECP.decrypt(ct.R,ct.c,kp.k);
+  $('eo').textContent+=`\n\nDECRYPTION (receiver, knows k)\n 1. S' = kR = ${SECP.hex(SECP.mul(kp.k,ct.R)[0])} (same S.x, since k(rG) = r(kG))\n 2. m = c XOR keystream = "${TD.decode(new Uint8Array(m))}"`}
+function caeEnc(){const k=+$('ck').value;$('co').textContent=`key = ${k}\nciphertext = ${CAE.enc($('msg').value,k)}`}
+function caeDec(){const k=+$('ck').value,c=CAE.enc($('msg').value,k);$('co').textContent=`key = ${k}\nciphertext = ${c}\ndecrypted  = ${CAE.dec(c,k)}`}
+function compare(){
+  if(!test){$('so').textContent='Corpus not loaded yet';return} if(!kp)genKeys();
+  const s=test.slice(0,5000).map(x=>String.fromCharCode(65+x)).join(''),k=+$('ck').value,cc=CAE.enc(s,k);
+  const cnt=(str,n,f)=>{const a=Array(n).fill(0);for(const ch of str)a[f(ch)]++;return a};
+  const p=cnt(s,26,c=>c.charCodeAt(0)-65),c1=cnt(cc,26,c=>c.charCodeAt(0)-65);
+  const bytes=[...TE.encode(s)],r1=SECP.encrypt(bytes,kp.Q,SECP.rand(256)),r2=SECP.encrypt(bytes,kp.Q,SECP.rand(256)),e=Array(256).fill(0);r1.c.forEach(v=>e[v]++);
+  bars('h1',p,'plaintext letters');bars('h2',c1,`Caesar (key ${k})`);bars('h3',e,'ECC scheme: ciphertext bytes 0–255');
+  const same=CAE.enc(s,k)===cc;
+  $('so').textContent=`entropy (bits/symbol)   plaintext letters: ${ent(p).toFixed(3)}   Caesar ciphertext: ${ent(c1).toFixed(3)}   (max log2(26) = 4.700)
+                        ECC ciphertext bytes: ${ent(e).toFixed(3)}   (max 8; with 5000 samples a perfectly uniform source gives about 7.96)
+Caesar only rotates the histogram: same shape, same entropy, language structure fully visible.
+ECC ciphertext bytes look uniform.
+Determinism: encrypting the same text twice with Caesar gives identical ciphertexts: ${same}
+             with the ECC scheme two encryptions agree on ${r1.c.filter((v,i)=>v===r2.c[i]).length}/5000 bytes (≈ 20 expected by chance)`}
+function useCae(){const k=+$('ck').value;$('cx').value=CAE.enc($('msg').value,k)}
+function crack(){
+  if(!M){$('ao5').textContent='Corpus not loaded yet';return}
+  const t=$('cx').value,C=CAE.letters(t);if(!C.length){$('ao5').textContent='No letters.';return}
+  let o=`${C.length} letters. Key found by each method:\n`;
+  CAE.methods.forEach(m=>{const k=CAE.crack(C,M,m);o+=`  ${m.padEnd(8)} key = ${String(k).padStart(2)}  → ${CAE.dec(t,k).slice(0,60)}\n`});
+  o+='\nExhaustive search: all 26 candidates\n key  chi²      trigram log-lik/letter  decryption\n';
+  for(let k=0;k<26;k++){const P=C.map(x=>CAE.mod26(x-k));o+=`${String(k).padStart(4)}  ${(-CAE.scorers.chi2(P,M)).toFixed(0).padEnd(8)}  ${(CAE.scorers.trigram(P,M)/P.length).toFixed(2).padEnd(22)}  ${CAE.dec(t,k).slice(0,40)}\n`}
+  $('ao5').textContent=o}
+async function experiment(){
+  if(!M)return;const T=+$('tr').value;let o='length  '+CAE.methods.map(m=>m.padEnd(8)).join('')+'\n';
+  for(const L of [5,10,20,30,50,100,200,500]){
+    $('ao5').textContent=o+`… length ${L}`;await new Promise(r=>setTimeout(r,20));
+    const ok={};CAE.methods.forEach(m=>ok[m]=0);
+    for(let i=0;i<T;i++){const s=Math.floor(Math.random()*(test.length-L)),k=Math.floor(Math.random()*26),Cc=test.slice(s,s+L).map(x=>(x+k)%26);CAE.methods.forEach(m=>{if(CAE.crack(Cc,M,m)===k)ok[m]++})}
+    o+=String(L).padEnd(8)+CAE.methods.map(m=>(Math.round(100*ok[m]/T)+'%').padEnd(8)).join('')+'\n'}
+  $('ao5').textContent=o+`\n(success rate over ${T} random keys and held-out text windows per length)`}
+async function attack(kind){
+  if(!ct){$('ao').textContent='Generate keys and encrypt first (section 2).';return}
+  const bits=kp.bits;if(kind==='brute'&&bits>24){$('ao').textContent='Brute force is limited to ≤ 24 bits here (it would take too long). Use baby-step giant-step.';return}
+  $('ao').textContent='running…';const t0=performance.now();
+  const k=kind==='brute'?await SECP.brute(kp.Q,bits,p=>$('ao').textContent=`brute force… tried k up to ${p}`):await SECP.bsgs(kp.Q,bits,p=>$('ao').textContent=`baby-step giant-step… ${p}`);
+  const ms=performance.now()-t0,steps=kind==='brute'?Number(k):2*2**Math.ceil(bits/2);
+  if(kind==='brute')rate=steps/(ms/1000);
+  const ok=k&&SECP.eqA(SECP.mul(k,G),kp.Q),m=k?TD.decode(new Uint8Array(SECP.decrypt(ct.R,ct.c,k))):'';
+  const r=rate||1e5,y=e=>(2**e/r/3.156e7).toExponential(1);
+  $('ao').textContent=`${kind==='brute'?'Exhaustive search':'Baby-step giant-step'} on a ${bits}-bit private key
+recovered k = 0x${k?k.toString(16):'?'}   (check kG = Q: ${ok})   steps ≈ ${steps.toExponential(2)}   time ${ms.toFixed(0)} ms
+decrypted message = "${m}"
+(real k was 0x${kp.k.toString(16)}; the attack never used it)
+
+Extrapolation to secp256k1 (k ~ 2²⁵⁶) at ${r.toExponential(1)} additions/s (${rate?'measured here':'assumed; run brute force to measure'}):
+  exhaustive search ≈ 2²⁵⁶ steps ≈ ${y(256)} years
+  BSGS / Pollard rho ≈ 2¹²⁸ steps ≈ ${y(128)} years (BSGS would also need ~2¹²⁸ stored points)`}
+</script></body></html>
