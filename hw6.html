@@ -1,0 +1,121 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HW6</title><link rel="stylesheet" href="style.css"><script src="integ.js"></script><script src="ncdf.js"></script>
+<style>select{background:var(--card);color:var(--fg);border:1px solid var(--bd);padding:.3rem}</style></head><body>
+<p><a href="index.html">← home</a></p>
+<h1>HW6 · Riemann vs Lebesgue, and the normal CDF</h1>
+
+<h2>Ex. 1 · Riemann and Lebesgue integration</h2>
+<div class="txt"><p><b>Riemann</b> partitions the <i>domain</i> [a,b] into N subintervals and sums f(tag)·width (we use left, right, midpoint and trapezoid tags). <b>Lebesgue</b> partitions the <i>range</i> into levels y<sub>0</sub> &lt; … &lt; y<sub>K</sub> and sums y<sub>j</sub>·μ(f<sup>−1</sup>[y<sub>j</sub>, y<sub>j+1</sub>)), the measure of the preimage of each slab. Two ways to get that measure are implemented: <b>sampled</b> (fraction of N midpoint samples whose value falls in the slab) and <b>exact</b> (closed-form measure of the sublevel set, available here because the preimages are intervals; it costs O(K) and uses no samples). Lower/upper sums use the bottom/top level of each slab, "mid" its centre.</p></div>
+<div class="row">function: <select id="fn"></select> levels for the sampled version:
+<select id="km"><option value="sqrt">K = √n</option><option value="100">K = 100</option><option value="1000">K = 1000</option></select>
+<button onclick="runInt()">Run convergence study</button></div>
+<pre id="i1" style="max-height:none"></pre>
+<canvas id="c1" width="700" height="300"></canvas>
+<pre id="i2" style="max-height:none"></pre>
+
+<h3 style="color:var(--ac2)">Pathological functions</h3>
+<div class="row"><button onclick="dirichlet()">Dirichlet function</button><button onclick="thomae()">Thomae function</button></div>
+<pre id="p1" style="max-height:none"></pre>
+
+<h3 style="color:var(--ac2)">Discussion (Ex. 1)</h3>
+<div class="txt">
+<ul>
+<li><b>Same value when both exist.</b> A Riemann-integrable function is Lebesgue-integrable with the same integral, and every smooth example above converges to the exact value in both approaches. The converse fails: Lebesgue integrability is strictly more general.</li>
+<li><b>Smooth functions: Riemann wins in practice.</b> Midpoint and trapezoid rules have error O(N<sup>−2</sup>) (about 10<sup>−13</sup> for N = 10<sup>6</sup>), left/right O(N<sup>−1</sup>) for x², sin(x)/x. For sin(x) on [0,π] left, right and trapezoid coincide because f(0) = f(π) = 0. The sampled Lebesgue sum is limited by the level width (≈ range/K) and by the sampling error of the measures: with K = √n it is still around 10<sup>−5</sup> at 10<sup>6</sup> samples. Even with exact preimage measures, lower and upper sums bracket the integral with error O(1/K), only the mid-level version reaches O(K<sup>−2</sup>). The Lebesgue sum is a Riemann sum whose values were rounded to a grid of levels, so for smooth functions it cannot beat the Riemann sum computed on the same samples.</li>
+<li><b>Discontinuous (step) functions.</b> The Riemann sums converge, but only like 1/N, with a constant that depends on where the jump falls on the grid: with an odd N some rules are exact by coincidence (e.g. the trapezoid rule here), which is luck and not a better rate. A Lebesgue sum sees only two values and two measures, so with exact preimages the error does not depend on a mesh at all (the "mid" column is exact here because the errors of the two level sets cancel by symmetry; lower and upper still bracket the value with error 1/K). With sampled measures the error is again ≈ 1/N, because the measure of {x &lt; 0.5} is estimated by counting samples. In short, the advantage of the Lebesgue view is only real when the preimage measures are available.</li>
+<li><b>Unbounded function 1/√x.</b> The Riemann sums with the endpoint x = 0 (left, trapezoid) are infinite: the Riemann integral is improper and defined as lim ∫<sub>ε</sub><sup>1</sup>. The right and midpoint sums converge, but slowly, like N<sup>−1/2</sup> (the error is dominated by the first subinterval: ∫<sub>0</sub><sup>h</sup>x<sup>−1/2</sup>dx = 2√h, while the midpoint sum has √(2h)). The Lebesgue integral of a non-negative function needs no limit: with the layer-cake formula ∫f = ∫<sub>0</sub><sup>∞</sup> μ{f &gt; t}dt = ∫<sub>0</sub><sup>∞</sup> min(1, 1/t²)dt = 1 + 1 = 2. Numerically the levels must be refined where f is large (we use y<sub>j</sub> ∝ (j/K)<sup>3</sup>, truncated at K²) and convergence is still slow (about K<sup>−2/3</sup> in the table).</li>
+<li><b>Dirichlet function.</b> Every subinterval of every partition contains rationals and irrationals, so the upper Darboux sum is 1 and the lower is 0 for every partition: not Riemann-integrable. Riemann sums depend on the tags: rational tags give 1, irrational tags give 0 and any mixture gives anything in between. Lebesgue: {f = 1} = ℚ ∩ [0,1] is countable, hence has measure 0, so ∫f = 1·0 + 0·1 = 0. No floating-point experiment can reproduce this, because every machine number is rational: the tags must be chosen symbolically, as done above.</li>
+<li><b>Thomae function.</b> It is discontinuous at every rational but continuous at every irrational point; the set of discontinuities ℚ ∩ [0,1] has measure zero, so by Lebesgue's criterion it is Riemann-integrable, with integral 0. The numbers above show it: the lower sum is 0 and the upper sum decreases (slowly) towards 0; Riemann sums with rational tags depend on the arithmetic of N (N = 1009 prime gives about 2/N, N = 1000 gives a much larger value) but also go to 0. For Lebesgue, each set {f ≥ 1/k} is finite (≈ 3k²/π² points), so it has measure 0 and every simple-function approximation integrates to 0.</li>
+<li><b>Efficiency.</b> Riemann: N evaluations, O(1) memory, trivial to implement. Sampled Lebesgue: the same N evaluations plus binning and O(K) counters (our code also stores the values, O(N)); it adds nothing for deterministic 1-D integrals. Exact Lebesgue: O(K) work, but only when μ{f &lt; t} is known in closed form or by root finding on monotone pieces, which is the real difficulty. The range-partition idea does pay off in other settings: in the theory (convergence theorems, measure-zero sets) and in Monte-Carlo estimation in high dimension, where measures of level sets are estimated by sampling.</li>
+</ul></div>
+
+<h2>Ex. 2 · Numerical computation of the normal CDF</h2>
+<div class="txt"><p>Φ(x) = ∫<sub>−∞</sub><sup>x</sup> φ(t)dt with φ(t) = e<sup>−t²/2</sup>/√(2π). Methods implemented: composite <b>trapezoid</b> and <b>Simpson</b> on Φ(x) = ½ ± ∫<sub>0</sub><sup>|x|</sup>φ; the <b>Maclaurin series of erf</b> (alternating) and the <b>series with positive terms</b> ½ + φ(x)·(x + x³/3 + x⁵/(3·5) + …); a <b>continued fraction</b> for the tail Q(x) = φ(x)/(x + 1/(x + 2/(x + 3/(x + …)))); the <b>Abramowitz–Stegun 7.1.26</b> erf approximation; and a double-precision <b>rational approximation</b> (Hart 1968, in West's 2005 form: two degree-6/7 polynomials for |x| &lt; 7.07, a short continued fraction beyond). Reference values: computed with the arbitrary-precision library mpmath (40 digits) and cross-checked with the CDFLIB documentation (docs.rs/crate/cdflib), which lists Φ(1.96) = 0.9750021048517796, Φ(1) = 0.8413447460685429 and 1 − Φ(5) ≈ 2.866516·10<sup>−7</sup>, the same values.</p></div>
+<div class="row">N trapezoid: <input id="nt" type="number" value="1000" min="2"> N Simpson: <input id="ns" type="number" value="200" min="2">
+<button onclick="compare()">Relative error at reference points</button><button onclick="timing()">Timing</button><button onclick="conv()">Quadrature convergence (x = 1.96)</button></div>
+<div class="row">evaluate at x = <input id="xv" type="number" value="1.96" step="0.1"><button onclick="evalx()">All methods</button></div>
+<pre id="n1" style="max-height:none"></pre>
+<canvas id="c2" width="700" height="300"></canvas>
+
+<h3 style="color:var(--ac2)">Discussion (Ex. 2)</h3>
+<div class="txt">
+<h3>Why Φ has no elementary form (Liouville)</h3>
+<p>"Elementary" means built from rational functions, exp, log, algebraic functions (hence trigonometric ones) by arithmetic, composition and inversion. <b>Liouville's theorem on integration in finite terms</b> (1830s, in the form refined by Rosenlicht and Risch): if f and g are rational functions with g non-constant, ∫ f·e<sup>g</sup>dx is elementary if and only if there is a <i>rational</i> function R with R′ + g′R = f, and then the integral equals R·e<sup>g</sup>. For φ we have g = −x²/2 and f = 1/√(2π) (a constant), so we would need R′ − xR = c with c ≠ 0. This is impossible: if R has a pole of order m ≥ 1 at some point, R′ has a pole of order m + 1 there while xR has order at most m, so nothing cancels the leading term; if R is a polynomial of degree d, xR has degree d + 1 while R′ has degree d − 1; and R = 0 gives 0 = c. Hence e<sup>−t²/2</sup> has no elementary antiderivative, and neither has Φ. Note what this does <i>not</i> say: the definite integral over the whole line is perfectly computable, ∫<sub>−∞</sub><sup>∞</sup>φ = 1 by the polar-coordinate trick, a tool outside the "find an antiderivative" world.</p>
+<h3>erf: exact representation, but not yet a number</h3>
+<p>The error function erf(z) = (2/√π)∫<sub>0</sub><sup>z</sup>e<sup>−t²</sup>dt is the new special function created for exactly this antiderivative, and Φ(x) = ½[1 + erf(x/√2)] = ½·erfc(−x/√2) is then an exact analytical identity. But "exact" only means that the problem was renamed: erf(z) at a generic point is in general an irrational number that can be computed only by an algorithm: a power series, a continued fraction, numerical quadrature or a minimax rational approximation. That is what libraries do: they switch between several of these depending on the range of x (the same logic as our experiments).</p>
+<h3>What the experiments show</h3>
+<ul>
+<li><b>Quadrature</b> is the most direct method but the least efficient: the trapezoid error is O(h²) (the end-point derivative φ′(x) ≠ 0 spoils superconvergence), Simpson O(h⁴), and each evaluation costs N exponentials. For a given accuracy, Simpson needs far fewer nodes (see the convergence plot, which plateaus near 10<sup>−16</sup> because of round-off). In the far tail both lose all relative accuracy: Φ(−8) ≈ 6.2·10<sup>−16</sup> is the difference ½ − ½, below the round-off of 0.5.</li>
+<li><b>The Maclaurin series of erf</b> is accurate to about 10<sup>−16</sup> for small and moderate |x| (the table shows ~10<sup>−16</sup> up to |x| = 3) and cheap to code, but its terms alternate and grow large before decaying when |x| is big: at x = 8 the error is already about 7·10<sup>−5</sup>. The series with all positive terms avoids that cancellation for x &gt; 0, but for negative x it still computes 0.5 − (nearly 0.5), so relative accuracy in the left tail is lost.</li>
+<li><b>The continued fraction</b> is excellent in the tails (relative error ≈ 10<sup>−16</sup> for |x| ≥ 3 with 60 terms) and useless near 0, where it converges slowly or not at all. Real libraries therefore combine a series or rational formula near the centre with a continued fraction or asymptotic expansion in the tails, and always compute the <i>smaller</i> tail directly, never as 1 − (nearly 1).</li>
+<li><b>A&S 7.1.26</b> is a cheap handful of flops but only good to about 10<sup>−7</sup> absolute; <b>the rational (Hart/West) approximation</b> reaches about 10<sup>−16</sup> absolute error everywhere at a cost independent of x (two polynomials of degree 6–7 and one exp). Its relative error in the far tail is larger (5·10<sup>−11</sup> at x = −5, 9·10<sup>−9</sup> at x = −8 in our run) because the approximation targets absolute error; Cody's erfc algorithm in standard libraries targets relative error.</li>
+<li><b>Efficiency ranking</b> (see the timing table, which depends on your machine): rational and A&S need one exp and a few multiplications, the series need tens of terms, the continued fraction needs about 60 divisions, and quadrature needs N exponentials. So: use erfc/Φ from the standard library or a Cody-type rational approximation, not quadrature, which is useful for checking and for distributions that have no special-function form.</li>
+</ul></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const ex=v=>v===0?'0':!isFinite(v)?'∞':v.toExponential(1);
+Object.keys(INT.F).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=INT.F[k].name;$('fn').appendChild(o)});
+function loglog(id,series){
+  const c=$(id),g=c.getContext('2d'),W=c.width,H=c.height,pos=v=>isFinite(v)&&v!==undefined;
+  const xs=series.flatMap(s=>s.xs),ys=series.flatMap(s=>s.ys.filter(pos).map(v=>Math.max(v,1e-17)));
+  const lx=Math.log10(Math.min(...xs)),hx=Math.log10(Math.max(...xs)),ly=Math.floor(Math.log10(Math.min(...ys))),hy=Math.ceil(Math.log10(Math.max(...ys)));
+  const X=v=>46+(Math.log10(v)-lx)/Math.max(hx-lx,1e-9)*(W-66),Y=v=>H-24-(Math.log10(Math.max(v,1e-17))-ly)/Math.max(hy-ly,1)*(H-40);
+  g.clearRect(0,0,W,H);g.font='11px monospace';g.strokeStyle='#3d2563';g.fillStyle='#8a7aa6';
+  for(let e=ly;e<=hy;e++){g.beginPath();g.moveTo(46,Y(10**e));g.lineTo(W-20,Y(10**e));g.stroke();g.fillText('1e'+e,4,Y(10**e)+3)}
+  for(let e=Math.ceil(lx);e<=Math.floor(hx);e++)g.fillText('1e'+e,X(10**e)-10,H-8);
+  series.forEach((s,k)=>{g.strokeStyle=g.fillStyle=s.col;g.beginPath();let st=false;s.xs.forEach((x,i)=>{const y=s.ys[i];if(!pos(y)){st=false;return}st?g.lineTo(X(x),Y(y)):g.moveTo(X(x),Y(y));st=true});g.stroke();
+    s.xs.forEach((x,i)=>{if(pos(s.ys[i])){g.beginPath();g.arc(X(x),Y(s.ys[i]),2.5,0,7);g.fill()}});g.fillText('● '+s.label,W-215,14+13*k)});
+}
+const KMODE=n=>{const m=$('km').value;return m==='sqrt'?Math.max(2,Math.round(Math.sqrt(n))):+m};
+function tm(f,reps=1){let b=Infinity;for(let i=0;i<reps;i++){const t=performance.now();f();b=Math.min(b,performance.now()-t)}return b}
+function runInt(){
+  const fn=INT.F[$('fn').value],ns=[11,33,101,315,1001,3161,10001,31621,100001,316229,1000001],S={l:[],m:[],t:[],ls:[],le:[]};
+  let o=`${fn.name}   exact = ${fn.exact}\nabsolute errors\n`+'n'.padEnd(9)+'R-left'.padEnd(10)+'R-right'.padEnd(10)+'R-mid'.padEnd(10)+'R-trap'.padEnd(10)+'Leb-samp'.padEnd(10)+'Leb-ex√n'.padEnd(10)+'Leb-ex n\n';
+  ns.forEach(n=>{const r=INT.riemann(fn,n),ls=INT.lebesgue(fn,n,KMODE(n)),le1=INT.lebesgueExact(fn,Math.max(2,Math.round(Math.sqrt(n)))),le2=INT.lebesgueExact(fn,n),e=v=>Math.abs(v-fn.exact);
+    o+=String(n).padEnd(9)+[e(r.left),e(r.right),e(r.mid),e(r.trap),e(ls.mid),e(le1.mid),e(le2.mid)].map(v=>ex(v).padEnd(10)).join('')+'\n';
+    S.l.push(e(r.left));S.m.push(e(r.mid));S.t.push(e(r.trap));S.ls.push(e(ls.mid));S.le.push(e(le2.mid))});
+  const n=ns[ns.length-1];
+  o+=`\ntiming at n = ${n}: Riemann (4 sums) ${tm(()=>INT.riemann(fn,n)).toFixed(1)} ms | Lebesgue sampled (K=${KMODE(n)}) ${tm(()=>INT.lebesgue(fn,n,KMODE(n))).toFixed(1)} ms | Lebesgue exact (K=n) ${tm(()=>INT.lebesgueExact(fn,n)).toFixed(1)} ms`;
+  $('i1').textContent=o;
+  loglog('c1',[{xs:ns,ys:S.l,col:'#9dff3a',label:'Riemann left'},{xs:ns,ys:S.m,col:'#ff7a1a',label:'Riemann midpoint'},{xs:ns,ys:S.t,col:'#e6def2',label:'Riemann trapezoid'},{xs:ns,ys:S.ls,col:'#b388ff',label:'Lebesgue sampled'},{xs:ns,ys:S.le,col:'#4dd0e1',label:'Lebesgue exact (K=n)'}]);
+  let p='Lebesgue with exact preimage measures: errors of lower / mid / upper sum\nK'.padEnd(9)+'lower'.padEnd(10)+'mid'.padEnd(10)+'upper\n';
+  [10,100,1000,10000,100000].forEach(K=>{const r=INT.lebesgueExact(fn,K);p+=String(K).padEnd(9)+[r.lower,r.mid,r.upper].map(v=>ex(Math.abs(v-fn.exact)).padEnd(10)).join('')+'\n'});
+  $('i2').textContent=p+'(for the unbounded 1/√x the top level is truncated at K², so "upper" is not a true upper bound; Riemann left/trapezoid are ∞ there because f(0) = ∞)';
+}
+function dirichlet(){
+  let o='DIRICHLET  f = 1 on rationals, 0 on irrationals, on [0,1]\n\nN       rational tags   irrational tags   random tags (30% rational)   Darboux upper   Darboux lower\n';
+  [10,100,1000,10000].forEach(N=>{let k=0;for(let i=0;i<N;i++)if(Math.random()<0.3)k++;o+=String(N).padEnd(8)+'1'.padEnd(16)+'0'.padEnd(18)+(k/N).toFixed(3).padEnd(29)+'1'.padEnd(16)+'0\n'});
+  o+='\nRiemann sums can be made to converge to anything in [0,1] by choosing the tags → no Riemann integral (upper 1 ≠ lower 0 for every partition).\nLebesgue: {f = 1} = Q ∩ [0,1] is countable, mu = 0  ⇒  ∫ f = 1·0 + 0·1 = 0.';
+  $('p1').textContent=o}
+const gcd=(a,b)=>b?gcd(b,a%b):a;
+function thomae(){
+  let o='THOMAE  f(p/q) = 1/q (lowest terms), 0 on irrationals, on [0,1]  (f(0) = f(1) = 1)\n\nN       Riemann (rational tags i/N)   Riemann (irrational tags)   Darboux upper U_N   Darboux lower\n';
+  [10,50,97,100,360,1000,1009,3000].forEach(N=>{let s=0,U=0;for(let i=1;i<=N;i++){s+=gcd(i,N)/N;let q=1;while(Math.floor(i*q/N)<Math.ceil((i-1)*q/N))q++;U+=1/q}
+    o+=String(N).padEnd(8)+(s/N).toFixed(5).padEnd(30)+'0'.padEnd(28)+(U/N).toFixed(5).padEnd(20)+'0\n'});
+  const K=1000,phi=Array.from({length:K+1},(_,i)=>i);for(let p=2;p<=K;p++)if(phi[p]===p)for(let m=p;m<=K;m+=p)phi[m]-=phi[m]/p;
+  o+='\nLebesgue view: C_k = #{x in [0,1]: f(x) ≥ 1/k} = 1 + Σ_{q≤k} φ(q), a FINITE set ⇒ measure 0\nk       C_k       3k²/π²\n';
+  let c=1,kk=0;[1,2,3,5,10,20,50,100,300,1000].forEach(k=>{for(let q=kk+1;q<=k;q++)c+=phi[q];kk=k;o+=String(k).padEnd(8)+String(c).padEnd(10)+(3*k*k/Math.PI**2).toFixed(1)+'\n'});
+  o+='\nEvery simple function s_k = Σ_{j≤k}(1/j − 1/(j+1))·1{f ≥ 1/j} has ∫ s_k = 0 and s_k ↑ f  ⇒  ∫ f = 0 (and the Riemann integral is 0 too: the discontinuity set Q has measure zero).';
+  $('p1').textContent=o}
+
+const REF=[[0,'0.5'],[0.5,'0.6914624612740131036377046'],[1,'0.8413447460685429485852325'],[1.96,'0.9750021048517795637871763'],[3,'0.9986501019683699054733482'],[5,'0.9999997133484281208060883'],[8,'0.9999999999999993779039426'],[-1,'0.1586552539314570514147675'],[-3,'0.001349898031630094526651815'],[-5,'0.0000002866515718791939116737523'],[-8,'6.220960574271784123515995e-16']];
+const methods=()=>{const Nt=Math.max(2,+$('nt').value|0),Ns=Math.max(2,+$('ns').value|0);return{[`trapezoid N=${Nt}`]:x=>NCDF.trapezoid(x,Nt),[`Simpson N=${Ns}`]:x=>NCDF.simpson(x,Ns),'erf series':NCDF.viaErfSeries,'pos. series':NCDF.positiveSeries,'cont.fraction':x=>Math.abs(x)>=2?NCDF.continuedFraction(x,60):NaN,'A&S 7.1.26':NCDF.abramowitzStegun,'rational':NCDF.rational}};
+function compare(){
+  const M=methods();let o='relative error |Φ_method − Φ_ref| / Φ_ref   (reference: mpmath, 40 digits)\n'+'x'.padEnd(6)+'Φ_ref'.padEnd(22)+Object.keys(M).map(k=>k.padEnd(18)).join('')+'\n';
+  REF.forEach(([x,r])=>{const R=Number(r);o+=String(x).padEnd(6)+r.slice(0,20).padEnd(22)+Object.values(M).map(f=>{const v=f(x);return (isNaN(v)?'–':ex(Math.abs(v-R)/R)).padEnd(18)}).join('')+'\n'});
+  $('n1').textContent=o+'\n(the reference itself is rounded to a double: ~1e-16 is the floor; the continued fraction is only meant for |x| ≥ 3)'}
+function evalx(){
+  const x=+$('xv').value,M=methods();let o=`x = ${x}\n`;const ref=NCDF.rational(x);
+  Object.entries(M).forEach(([k,f])=>{const v=f(x);o+=k.padEnd(20)+(isNaN(v)?'n/a (needs |x| ≥ 2)':v.toPrecision(17)+'   diff vs rational: '+ex(Math.abs(v-ref))+'\n')});
+  $('n1').textContent=o}
+function timing(){
+  const M=methods(),xs=Array.from({length:2000},()=>Math.random()*12-6);let o='time per call, x uniform in [−6, 6]\n';
+  Object.entries(M).forEach(([k,f])=>{const reps=k.startsWith('trap')||k.startsWith('Simp')?3:60;let sink=0;const t=tm(()=>{for(let r=0;r<reps;r++)for(const x of xs)sink+=f(x)||0},1)/(reps*xs.length)*1000;o+=k.padEnd(22)+(t<1?(t*1000).toFixed(0)+' ns':t.toFixed(2)+' µs')+'\n'});
+  $('n1').textContent=o+'\n(the continued fraction is timed with 60 terms, including |x| < 2 where its result is meaningless)'}
+function conv(){
+  const x=1.96,R=0.9750021048517795637871763,Ns=Array.from({length:14},(_,i)=>2**(i+1));
+  loglog('c2',[{xs:Ns,ys:Ns.map(n=>Math.abs(NCDF.trapezoid(x,n)-R)/R),col:'#9dff3a',label:'trapezoid (slope −2)'},{xs:Ns,ys:Ns.map(n=>Math.abs(NCDF.simpson(x,n)-R)/R),col:'#ff7a1a',label:'Simpson (slope −4)'}]);
+  $('n1').textContent='relative error of Φ(1.96) against the number of subintervals N (log–log). The curves flatten around 1e-16 (round-off).'}
+runInt();
+</script></body></html>
