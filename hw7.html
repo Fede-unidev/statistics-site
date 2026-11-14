@@ -1,0 +1,95 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HW7</title><link rel="stylesheet" href="style.css"><script src="indep.js"></script>
+<style>select{background:var(--card);color:var(--fg);border:1px solid var(--bd);padding:.3rem}
+table{border-collapse:collapse;margin:.3rem 0 1rem;font-size:.85rem}td,th{border:1px solid var(--bd);padding:.2rem .55rem;text-align:right}th{color:var(--ac);background:var(--card)}.tot{color:var(--dim)}
+.cap{color:var(--ac2);margin:.9rem 0 .1rem}.sc{overflow-x:auto}</style></head><body>
+<p><a href="index.html">← home</a></p>
+<h1>HW7 · statistical independence</h1>
+
+<h2>1. Data (X, F)</h2>
+<div class="row">example: <select id="ex" onchange="loadEx()">
+<option value="hair">Hair × eye colour (Snee 1974, 592 students)</option>
+<option value="ind">Simulated: independent variables (n = 300)</option>
+<option value="dep">Simulated: dependent variables (n = 300)</option>
+<option value="small">Simulated: small sample (n = 30)</option></select>
+generator: n = <input id="gn" type="number" value="300" min="10"> association s = <input id="gs" type="number" value="0.2" step="0.05" min="0" max="1"> categories = <input id="gk" type="number" value="3" min="2" max="5">
+<button onclick="gen()">Generate</button></div>
+<p class="dim">One record per line: <code>x,f</code> (comma, semicolon or tab). In the generator, with probability s the value of F copies the category of X, otherwise F is drawn uniformly: s = 0 means independent.</p>
+<textarea id="data" rows="6" style="width:100%"></textarea>
+<div class="row"><label><input type="checkbox" id="hd" checked> first line is a header</label> α = <input id="al" type="number" value="0.05" step="0.01" min="0.0001" max="0.5">
+<label><input type="checkbox" id="pm" checked> also permutation test</label><button onclick="analyze()">Analyze</button></div>
+
+<div id="out" class="sc"></div>
+<canvas id="mo" width="700" height="300"></canvas>
+
+<h2>5. Discussion</h2>
+<div class="txt">
+<h3>Independence: theory</h3>
+<p>Two events are independent if P(A ∩ B) = P(A)·P(B), equivalently P(A | B) = P(A): knowing B does not change the probability of A. Two discrete random variables X and F are independent if P(X = x, F = f) = P(X = x)·P(F = f) for <i>every</i> pair (x, f), equivalently if the conditional distribution of F is the same for every value of X, P(F = f | X = x) = P(F = f). On a contingency table this means that all <b>row profiles</b> (conditional frequencies) coincide with the marginal profile, and likewise for the columns. With n observations, row totals r<sub>i</sub> and column totals c<sub>j</sub>, independence predicts the <b>expected counts</b> E<sub>ij</sub> = r<sub>i</sub>c<sub>j</sub>/n, which come from the product of the marginal relative frequencies.</p>
+<h3>The chi-square test</h3>
+<p>H<sub>0</sub>: X and F are independent. The statistic χ² = Σ<sub>ij</sub> (O<sub>ij</sub> − E<sub>ij</sub>)²/E<sub>ij</sub> measures the distance between observed and expected counts. Under H<sub>0</sub>, for large expected counts, it is approximately χ² distributed with (r − 1)(c − 1) degrees of freedom (the number of cells minus the parameters estimated from the margins). The p-value P(χ²<sub>df</sub> ≥ χ²<sub>obs</sub>) is the probability, if H<sub>0</sub> were true, of a table at least as far from independence as the observed one (we compute it from the regularized incomplete gamma function; the permutation test, which shuffles the F labels and does not rely on the χ² approximation, is a check). A small p-value (below α) is evidence against independence; a large one only means that the data do not contradict it: not rejecting H<sub>0</sub> is not a proof of independence, especially for small n.</p>
+<h3>How to read the results</h3>
+<ul>
+<li><b>Independent data</b> (generator with s = 0): χ² is close to its degrees of freedom (the mean of a χ²<sub>df</sub>) and the p-value is typically large; but with α = 0.05 about 1 in 20 independent datasets is rejected by chance. Try several generations.</li>
+<li><b>Dependent data</b> (s &gt; 0): χ² grows roughly in proportion to n (for a fixed association), so the p-value drops very quickly with the sample size, and even a weak association becomes "significant" for large n. That is why the test must be accompanied by an effect size: Cramér's V = √(χ²/(n·min(r−1, c−1))) ranges from 0 (independence) to 1 (perfect association) and does not grow with n.</li>
+<li><b>Which cells matter.</b> The Pearson residuals (O − E)/√E, shown in colour, tell where the dependence comes from: orange cells occur more often than independence predicts, purple ones less often. In the hair/eye data, blond hair with blue eyes and dark hair with brown eyes occur far more often than expected.</li>
+<li><b>Validity.</b> The usual rule is that every expected count should be at least 5 (or at most 20% of cells below 5 and none below 1). For small samples such as the "small sample" example the χ² approximation is unreliable and the permutation p-value (or Fisher's exact test for 2 × 2 tables) should be preferred; categories can also be merged.</li>
+</ul>
+<h3>Association is not causation</h3>
+<p>Rejecting independence shows that X and F are <i>statistically associated</i>: the value of one carries information about the other. It does not say why. The association may arise because X influences F, because F influences X (reverse causation), because a third variable influences both (confounding: hair and eye colour are associated mainly through common genetic ancestry, not because one colour causes the other), or by selection effects in how the sample was collected. Aggregating data can even reverse an association (Simpson's paradox). Causal claims need more than a contingency table: randomized experiments, or careful control of confounders with a causal model. Conversely, independence has a clear meaning in probability but a failure to reject it in a sample, particularly a small one, does not exclude a real dependence. Finally, statistical independence is stronger than zero correlation: independent variables are uncorrelated, but uncorrelated ones can still be dependent, and the χ² test detects any form of dependence between categorical variables, not just a linear one.</p>
+</div>
+
+<script>
+const $=id=>document.getElementById(id),PAL=['#ff7a1a','#9dff3a','#b388ff','#4dd0e1','#e6def2','#ff5c8a','#f5d142'];
+function setData(pairs,hdr){$('data').value=hdr+'\n'+pairs.map(p=>p.join(',')).join('\n');analyze()}
+function loadEx(){const e=$('ex').value;
+  if(e==='hair')setData(IND.hairEye(),'Hair,Eye');
+  else if(e==='ind')setData(IND.synthetic(300,0,11),'X,F');
+  else if(e==='dep')setData(IND.synthetic(300,0.25,11),'X,F');
+  else setData(IND.synthetic(30,0,5),'X,F')}
+function gen(){setData(IND.synthetic(Math.max(10,+$('gn').value|0),Math.min(1,Math.max(0,+$('gs').value)),Math.floor(Math.random()*1e9),Math.min(5,Math.max(2,+$('gk').value|0))),'X,F')}
+const f=(v,d=3)=>v.toFixed(d),ps=p=>p<1e-4?p.toExponential(2):p.toFixed(4);
+function rc(r){const a=Math.min(1,Math.abs(r)/4)*.75;return r>=0?`rgba(255,122,26,${a})`:`rgba(137,90,200,${a})`}
+function tbl(cap,hx,hf,rowsFn,colTot,rowTot,colorFn,totalLabel='Σ'){
+  let h=`<div class="cap">${cap}</div><table><tr><th>${hx}\\${hf}</th>`+T.fs.map(v=>`<th>${v}</th>`).join('')+(rowTot?`<th class="tot">${totalLabel}</th>`:'')+'</tr>';
+  T.xs.forEach((x,i)=>{h+=`<tr><th>${x}</th>`+T.fs.map((_,j)=>`<td${colorFn?` style="background:${colorFn(i,j)}"`:''}>${rowsFn(i,j)}</td>`).join('')+(rowTot?`<td class="tot">${rowTot(i)}</td>`:'')+'</tr>'});
+  if(colTot)h+=`<tr><th class="tot">${totalLabel}</th>`+T.fs.map((_,j)=>`<td class="tot">${colTot(j)}</td>`).join('')+(rowTot?`<td class="tot">${colTot(-1)}</td>`:'')+'</tr>';
+  return h+'</table>'}
+let T,A;
+function analyze(){
+  const pairs=IND.parse($('data').value,$('hd').checked),alpha=Math.min(.5,Math.max(1e-4,+$('al').value));
+  if(pairs.length<5){$('out').textContent='Not enough valid records.';return}
+  T=IND.build(pairs);A=IND.analyze(T);if(A.r<2||A.c<2){$('out').textContent='Both variables need at least 2 categories.';return}
+  const {O}=T,n=A.n,hx=(($('hd').checked&&$('data').value.split('\n')[0].split(/[,;\t]/)[0])||'X'),hf=(($('hd').checked&&$('data').value.split('\n')[0].split(/[,;\t]/)[1])||'F');
+  let h=`<p>n = ${n} records, ${A.r} categories of ${hx}, ${A.c} categories of ${hf}.</p>`;
+  h+=tbl(`1. Contingency table: observed counts O<sub>ij</sub> with marginal totals`,hx,hf,(i,j)=>O[i][j],j=>j<0?n:A.cols[j],i=>A.rows[i]);
+  h+=tbl(`2. Joint relative frequencies n<sub>ij</sub>/n, with the marginal frequencies of ${hx} (right) and ${hf} (bottom)`,hx,hf,(i,j)=>f(O[i][j]/n),j=>j<0?'1':f(A.cols[j]/n),i=>f(A.rows[i]/n));
+  h+=tbl(`3a. Conditional frequencies P(${hf} | ${hx}): each row sums to 1; the last row is the marginal P(${hf}), which every row should equal under independence`,hx,hf,(i,j)=>f(O[i][j]/A.rows[i]),j=>j<0?'1':f(A.cols[j]/n),i=>'1',null,'P('+hf+')');
+  h+=tbl(`3b. Conditional frequencies P(${hx} | ${hf}): each column sums to 1; the last column is the marginal P(${hx})`,hx,hf,(i,j)=>f(O[i][j]/A.cols[j]),j=>'1',i=>f(A.rows[i]/n),null,'P('+hx+')');
+  h+=tbl(`4. Expected counts under independence E<sub>ij</sub> = r<sub>i</sub>·c<sub>j</sub> / n`,hx,hf,(i,j)=>f(A.E[i][j],2),j=>j<0?n:f(A.cols[j],0),i=>f(A.rows[i],0));
+  h+=tbl(`5. Contributions (O − E)²/E (colour = sign and size of the Pearson residual (O − E)/√E: orange more than expected, purple less)`,hx,hf,(i,j)=>f(A.contrib[i][j],2),j=>j<0?f(A.chi2,2):'',null,(i,j)=>rc(A.resid[i][j]),'χ²');
+  const crit=IND.chi2crit(A.df,alpha),rej=A.p<alpha,dfs=Math.min(A.r-1,A.c-1),k=Math.min(3,dfs)-1,sm=[.1,.07,.06][k],md=[.3,.21,.17][k],lg=[.5,.35,.29][k],eff=A.V<sm?'negligible':A.V<md?'small':A.V<lg?'medium':'large';
+  const cells=[];A.resid.forEach((row,i)=>row.forEach((r,j)=>cells.push({i,j,r})));cells.sort((a,b)=>Math.abs(b.r)-Math.abs(a.r));
+  const top=cells.slice(0,3).map(c=>`(${T.xs[c.i]}, ${T.fs[c.j]}): observed ${O[c.i][c.j]}, expected ${f(A.E[c.i][c.j],1)} (residual ${f(c.r,2)})`).join('; ');
+  let perm='';if($('pm').checked){const B=Math.max(100,Math.min(2000,Math.floor(2e7/n)));perm=IND.permP(pairs,A.chi2,B);}
+  h+=`<div class="cap">6. Test of independence</div><pre style="max-height:none">H0: ${hx} and ${hf} are independent      H1: they are associated
+χ² = ${f(A.chi2,3)}     df = (${A.r}−1)(${A.c}−1) = ${A.df}     critical value at α = ${alpha}: ${f(crit,3)}
+p-value = P(χ²_${A.df} ≥ ${f(A.chi2,3)}) = ${ps(A.p)}${perm!==''?`\npermutation p-value = ${ps(perm)}   (${Math.max(100,Math.min(2000,Math.floor(2e7/n)))} random shufflings of ${hf})`:''}
+Cramér's V = ${f(A.V,3)}   (${eff} association by Cohen's rule of thumb)
+smallest expected count = ${f(A.minE,2)};  cells with E &lt; 5: ${f(100*A.lowE,0)}%${A.minE<5&&A.lowE>0.2||A.minE<1?'   ⚠ χ² approximation unreliable (prefer the permutation p-value or merge categories)':''}
+
+Cells that depart most from independence: ${top}
+
+Conclusion: ${rej?`χ² &gt; critical value and p &lt; α, so we REJECT independence: the data show a statistically significant association between ${hx} and ${hf} (effect size ${eff}).`:`χ² &lt; critical value and p ≥ α, so we do NOT reject independence: the data are compatible with ${hx} and ${hf} being independent (this does not prove it).`}
+This is evidence of statistical association only; it says nothing about causation.</pre>`;
+  $('out').innerHTML=h;mosaic();
+}
+function mosaic(){
+  const c=$('mo'),g=c.getContext('2d'),W=c.width,H=c.height,x0=34,top=34,w=W-x0-10,h=H-top-44,O=T.O;g.clearRect(0,0,W,H);g.font='11px monospace';
+  let x=x0;T.xs.forEach((xv,i)=>{const wi=A.rows[i]/A.n*w;let y=top;T.fs.forEach((_,j)=>{const hj=O[i][j]/A.rows[i]*h;g.fillStyle=PAL[j%PAL.length];g.globalAlpha=.35+.65*Math.min(1,Math.abs(A.resid[i][j])/3.5);g.fillRect(x+1,y+1,Math.max(0,wi-2),Math.max(0,hj-2));g.globalAlpha=1;y+=hj});
+    g.fillStyle='#e6def2';g.fillText(String(xv).slice(0,Math.max(3,Math.floor(wi/7))),x+3,H-28);x+=wi});
+  g.fillText('width ∝ P(X), height ∝ P(F | X), opacity ∝ |residual|',x0,H-8);
+  T.fs.forEach((fv,j)=>{g.fillStyle=PAL[j%PAL.length];g.fillRect(x0+j*105,10,10,10);g.fillStyle='#e6def2';g.fillText(String(fv).slice(0,10),x0+j*105+14,19)});
+  g.fillText('0',20,top+h);g.fillText('1',20,top+10)}
+loadEx();
+</script></body></html>
